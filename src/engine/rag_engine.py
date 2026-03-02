@@ -1,0 +1,600 @@
+import ollama
+import asyncio
+
+from ollama import Client
+from langchain_ollama import ChatOllama
+from qdrant_client import QdrantClient, models
+from sentence_transformers import SentenceTransformer,CrossEncoder
+from src.config import config
+import os
+from src.prompts.prompt_template import prompts
+from langchain_core.output_parsers import StrOutputParser
+import numpy as np
+from torch import nn
+from langchain_core.prompts import ChatPromptTemplate
+from qdrant_client import AsyncQdrantClient, models
+import httpx
+from fastembed import SparseTextEmbedding
+from langchain_core.messages import HumanMessage, AIMessage, trim_messages
+from langchain_community.chat_message_histories import ChatMessageHistory
+from qdrant_client.http.models import PointStruct
+import hashlib
+import base64
+from io import BytesIO
+from PIL import Image
+import nest_asyncio
+nest_asyncio.apply()
+from langchain.schema import Document
+import re
+import httpx
+import json
+from huggingface_hub import AsyncInferenceClient # pip install huggingface_hub
+from qdrant_client import AsyncQdrantClient, models
+from groq import AsyncGroq
+
+# stabilize tunnel
+stable_client = httpx.AsyncClient(
+    verify=False,
+    http2=False,
+    timeout=httpx.Timeout(300.0, connect=60.0),
+    limits=httpx.Limits(max_keepalive_connections=0, max_connections=10),
+    headers={
+        "Connection": "close",
+        "ngrok-skip-browser-warning": "true"
+    }
+)
+
+qdrant_host = os.getenv("QDRANT_HOST", "localhost")
+qdrant_port = 6333
+
+client = QdrantClient(host=qdrant_host, port=qdrant_port)
+
+
+
+class MultimodalRAG:
+    def __init__(self):
+        self.client = client
+        self.text_model = SentenceTransformer(config.TEXT_MODEL_NAME,device='cpu')
+        self.vision_model = SentenceTransformer(config.IMAGE_MODEL_NAME,device='cpu',model_kwargs={"use_fast": True})
+        self.reranker = CrossEncoder(config.RERANKER_NAME,device='cpu',activation_fn=nn.Sigmoid())
+        self.ollama_client = Client(host='http://127.0.0.1:11434')
+        self.lock = asyncio.Semaphore(1)
+        self.CHILD_COLL = config.CHILD_COLL
+        self.PARENT_COLL = config.PARENT_COLL
+        self.THRESHOLD = 0.3
+        self.RERANK_LIMIT = 0.6
+        self.groq_key = config.GR_TOKEN
+        self.groq_client = AsyncGroq(api_key=self.groq_key)
+
+        self.model_id = "meta-llama/llama-4-scout-17b-16e-instruct"
+        self.base_model_kwargs={
+            "temperature": 0.2,
+            "max_tokens": 4098,
+            "top_p": 0.9,
+            "stream": True,
+            "frequency_penalty": 0.5,
+        }
+        self.judge_model_kwargs = {
+            "temperature": 0.0,
+            "max_tokens": 4098,
+            "top_p": 0.9,
+            "stream": True,
+            "frequency_penalty": 0.5,
+        }
+
+        self.llm = ChatOllama(
+            base_url=config.OlLAMA_URL_COLLAB,
+            model="llama3.2-vision:11b",
+            temperature=0.3,
+            num_ctx=2048,
+            repeat_penalty=1.3,
+            top_p=0.9,num_thread=4,
+            timeout=300,
+                    )
+        self.sparse_model = SparseTextEmbedding(model_name=config.SPARSE_MODEL_NAME)
+        self.chat_history = ChatMessageHistory()
+
+        self.trimer = trim_messages(
+            max_tokens=600,
+            strategy="last",
+            token_counter=self.llm,
+            start_on="human",
+            include_system=True
+        )
+
+        self.variations_llama = ChatOllama(model=config.VARIATIONS_LLAMA_MODEL_NAME,temperature=0.6)
+        self.base_prompt=prompts.base_prompt
+        self.critique_chain = prompts.critique_chain
+        self.query_expansion = (prompts.query_expansion | self.variations_llama | StrOutputParser())
+
+
+        self.semantic_cache = {}
+        self.cache_client = AsyncQdrantClient(url=config.QDRANT_URL)
+        self.cache_collection = "llm_cache"
+        # Check if cache collection exists, if not, create it
+        self._cache_initialized = False
+
+    async def close(self):
+        """Properly shuts down async connections to avoid 'loop closed' errors."""
+        print("🧼 Shutting down RAG Engine clients...")
+        """Properly shuts down all async connections to avoid 'loop closed' errors."""
+        try:
+
+            await self.client.close()
+            await self.cache_client.close()
+
+            print("✅ Cleanup complete.")
+        except Exception as e:
+            print(f"⚠️ Cleanup warning: {e}")
+
+    def reranker_scores_report(self, scores):
+        if not scores:
+            return {"best_score": 0.0, "median_scores": 0.0, "iqr": 0.0}
+        max_scores=np.max(scores)
+        median_scores=np.median(scores)
+        q1 = np.percentile(scores, 25)
+        q3 = np.percentile(scores, 75)
+        iqr = q3 - q1
+        report={"max_scores":float(max_scores),"median_scores":float(median_scores),
+                "q1":q1,"q3":q3, "iqr":iqr}
+        return report
+
+    def create_message(self,prompt,image):
+        message = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{image}"}}]}]
+        return message
+
+    def clean_newsletter_text(self, text: str) -> str:
+        """Removes scraping noise and header/footer artifacts."""
+        if "Dear friends," in text:
+            text = text.split("Dear friends,")[-1]
+        if "Keep learning!" in text:
+            text = text.split("Keep learning!")[0]
+
+        noise_patterns = [
+            r"Published\s+\w+\s+\d+,\s+\d+",
+            r"Reading time\s+\d+\s+min read",
+            r"Share\s+Loading.*Player\.\.\.",
+            r"AudioNative Player",
+            r"Elevenlabs Text to Speech",
+            r"\(https?://\S+\)"
+        ]
+        cleaned = text
+        for pattern in noise_patterns:
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+        return cleaned.strip()
+
+    async def describe_image(self, image_b64: str,related_titles: list) -> str:
+        """Generates a technical description using the Vision LLM."""
+        if not image_b64 or len(image_b64) < 100:
+            return "No visual data found in payload."
+
+        titles_str = ", ".join(related_titles)
+        print("🎨 Vision Task: Generating Image Description. on..",titles_str)
+
+
+        prompt = f"""This image is from an AI newsletter. 
+        The current news topics are: {titles_str}.
+        TASK: Provide a one-sentence technical description. 
+        Describe it in one technical sentence for a screen reader. 
+        Focus on diagrams, charts, or specific AI symbols present.
+        RULES:
+        - If it's a diagram/chart: Describe the data or flow (e.g., 'A bar chart showing...').
+        - If it's a person/photo: Identify the subject and context (e.g., 'Andrew Ng speaking at the World Economic Forum').
+        - If it's a logo: Say 'Logo of [Name]'.
+        - dont say "No diagram, chart or specific AI symbol present.", instead say "image for [article name]"
+        - MAXIMUM 15 words. Be literal and technical. No fluff like 'This is an image
+        - Generate exactly ONE technical sentence. DO NOT YAP, max is 10 words
+        - dont describe image as "The image from 'The Batch' AI newsletter "
+        - dont describe visual features like color of image 
+        - describe only what image about, if image is logo, say "logo of and name"
+        - sentence must be descriptive
+        -dont generate sentence like "man with coffee sitting"
+        - sentence must be descriptive and connected to title
+        - Focus ONLY on the unique graphic representing the specific news items mentioned above.
+        - Describe the graphic's layout (e.g., 'A bar chart showing...', 'A chemical diagram of...', 'A screenshot of a code interface...')."""
+
+        messages = self.create_message(prompt,image_b64)
+
+        try:
+            out = await self.groq_client.chat.completions.create(
+                messages=messages,
+                model=self.model_id,
+                **{**self.base_model_kwargs, "stream": False}
+            )
+            return out.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"⚠️ Vision Description Failed: {e}")
+            return "Illustration related to the AI news content."
+
+
+    async def _ensure_cache_exists(self):
+        """Forcefully checks and recreates the cache collection if missing."""
+        try:
+            response = await self.cache_client.get_collections()
+            existing_names = [c.name for c in response.collections]
+
+            if self.cache_collection not in existing_names:
+                print(f"🏗️ Rebuilding missing collection: {self.cache_collection}")
+                await self.cache_client.create_collection(
+                    collection_name=self.cache_collection,
+                    vectors_config=models.VectorParams(
+                        size=384,
+                        distance=models.Distance.COSINE
+                    )
+                )
+                print("✅ Collection Created Successfully")
+        except Exception as e:
+            print(f"⚠️ Cache Re-Init Failed: {e}")
+
+
+
+
+    async def get_semantic_cache(self, question: str):
+        await self._ensure_cache_exists()
+        try:
+
+            clean_question = question.strip().lower()
+
+            vector = await asyncio.to_thread(self.text_model.encode, clean_question)
+            vector_list = vector.tolist()
+
+
+            response = await self.cache_client.query_points(
+                collection_name=self.cache_collection,
+                query=vector_list,
+                limit=1,
+                with_payload=True
+            )
+
+            if response.points:
+                score = response.points[0].score
+                print(f"DEBUG: Cache Best Score found: {score:.4f}")
+
+                if score >= config.CACHE_THRESHOLD:
+                    print(f"⚡ SEMANTIC CACHE HIT (Score: {score:.4f})")
+                    return response.points[0].payload['answer_data']
+            else:
+                print("DEBUG: Cache is empty or no matches found.")
+
+        except Exception as e:
+            print(f"⚠️ Cache Lookup Failed: {e}")
+        return None
+
+    async def set_semantic_cache(self, question: str, answer_data: dict):
+        await self._ensure_cache_exists()
+        try:
+            clean_q = question.strip().lower()
+            vector = await asyncio.to_thread(self.text_model.encode, clean_q)
+
+            await self.cache_client.upsert(
+                collection_name=self.cache_collection,
+                points=[
+                    PointStruct(
+                        id=hashlib.md5(clean_q.encode()).hexdigest(),
+                        vector=vector.tolist(),
+                        payload={
+                            "question": clean_q,
+                            "answer_data": answer_data
+                        }
+                    )
+                ]
+            )
+            print("✅ Cache Write Successful")
+        except Exception as e:
+            print(f"⚠️ Cache Upsert Failed: {e}")
+
+
+    async def generate_variations(self, original_question: str):
+
+        try:
+            response = await self.query_expansion.ainvoke({"question": original_question})
+
+            variations = [q.strip() for q in response.split('\n') if q.strip()]
+            return variations[:3]  # Keep top 3
+        except Exception as e:
+            print(f"⚠️ Query Transform Failed: {e}")
+            return [original_question]
+
+    async def run_hybrid_rag(self,query_str,bypass_cache:bool=False, category=None, mode="Hybrid"):
+        print("RUNNING ON CLOUD")
+        if not bypass_cache:
+            cached = await self.get_semantic_cache(query_str)
+            if cached:
+                print("⚡ CACHE HIT: Returning stored answer.")
+                return cached
+        print(f"🔎 Original Query: {query_str}")
+
+        async with self.lock:
+            print(f"🔒 Lock Acquired for query: {query_str}")
+
+
+            query_filter = None
+            if category:
+                query_filter = models.Filter(
+                    must=[models.FieldCondition(key="type", match=models.MatchValue(value=category))]
+                )
+
+            variations = await self.generate_variations(query_str)
+            queries= [query_str] + variations
+            print(f"🧠 Generated Variations NEW: {queries}")
+
+            all_hits = []
+            seen_ids = set()
+            for q in queries:
+
+                t_vec = await asyncio.to_thread(self.text_model.encode, q, normalize_embeddings=True)
+                t_query = t_vec.tolist()
+
+                i_vec = await asyncio.to_thread(self.vision_model.encode, q, normalize_embeddings=True)
+                i_query = i_vec.tolist()
+                sparse_res_list = await asyncio.to_thread(list, self.sparse_model.embed([q]))
+                sparse_res = sparse_res_list[0]
+                sparse_vec = models.SparseVector(
+                    indices=sparse_res.indices.tolist(),
+                    values=sparse_res.values.tolist()
+                )
+
+                if mode == "Visual":
+                    results = await self.client.query_points(collection_name=self.CHILD_COLL, query=i_query, using="image",
+                                                             query_filter=query_filter, limit=config.RERANKER_K)
+                elif mode == "Text":
+                    results = await self.client.query_points(collection_name=self.CHILD_COLL, query=q, using="text",
+                                                       query_filter=query_filter, limit=config.RERANKER_K)
+                else:
+                    results = await self.client.query_points(
+                        collection_name=self.CHILD_COLL,
+                        prefetch=[
+                            models.Prefetch(query=t_query, using="text", limit=10),
+                            models.Prefetch(query=i_query, using="image", limit=10),
+                            models.Prefetch(query=sparse_vec, using="text-sparse", limit=10)
+                        ],
+                        query=models.FusionQuery(fusion=models.Fusion.RRF),
+                        query_filter=query_filter,
+                        score_threshold=0.5,
+                        limit=config.RERANKER_K
+                    )
+                for hit in results.points:
+                    if hit.id not in seen_ids:
+                        all_hits.append(hit)
+                        seen_ids.add(hit.id)
+
+            if not all_hits: return None
+
+            try:
+                pairs = [[query_str, hit.payload.get('chunk_text', "")] for hit in all_hits]
+                scores = await asyncio.to_thread(self.reranker.predict, pairs)
+                for i, hit in enumerate(all_hits):
+                    hit.score = float(scores[i])
+            except Exception as e:
+                    print(f"Reranker Error: {e}")
+
+            sorted_hits = sorted(all_hits, key=lambda x: x.score, reverse=True)
+            best_score = sorted_hits[0].score
+
+            fetch_tasks = []
+            unique_p_ids = []
+            seen_headlines = set()
+            scores=[]
+
+            for hit in sorted_hits:
+                p_id = hit.payload.get('parent_id')
+                if hit.score<self.RERANK_LIMIT: continue
+                if p_id and p_id not in unique_p_ids:
+                    scores.append(hit.score)
+                    unique_p_ids.append(p_id)
+                    fetch_tasks.append(self.client.retrieve(collection_name=self.PARENT_COLL, ids=[p_id]))
+                if len(unique_p_ids) >= 6: break
+
+            parent_results = await asyncio.gather(*fetch_tasks)
+
+
+            # ---  SMALL-TO-BIG EXPANSION ---
+            seen_parents = []
+            seen_ids = set()
+            seen_parents_text_content = []
+            seen_parents_payloads = []
+            sources = []
+            images_and_descriptions = []
+
+            for doc_list in parent_results:
+                if doc_list:
+                    payload = doc_list[0].payload
+                    headline = payload.get('headline', 'Untitled')
+                    if headline not in seen_headlines:
+                        print("March found:",headline)
+                        seen_headlines.add(headline)
+                        seen_parents_payloads.append(payload)
+                        idx = len(seen_parents_payloads)
+                        sources.append({
+                            "title": headline,
+                            "url": payload.get('url')
+                        })
+                        parent_doc = Document(
+                            page_content=payload.get('full_text'),
+                            metadata={
+                                "index": idx,
+                                "title": headline,
+                            }
+                        )
+                        raw_img = payload.get('image_b64', "")
+                        if len(raw_img) > 100:
+                            pure_string = raw_img.split(",")[-1] if "," in raw_img else raw_img
+                            pure_string = "".join(pure_string.split())
+                            desc = await self.describe_image(pure_string, [headline])
+
+                            # Only add to gallery if it's NOT a logo
+                            if "logo" not in desc.lower():
+                                print("-----------ADDED NON LOGO  IMG------------------")
+                                images_and_descriptions.append({
+                                    "image": pure_string,  # 🟢 Clean Base64 string
+                                    "description": desc  # 🟢 Technical description
+                                })
+
+
+
+                        seen_parents_text_content.append(parent_doc)
+
+
+            if not seen_parents_payloads: return None
+            print("SMALL TO BIG DONE")
+
+            combined_context = "\n\n---\n\n".join([doc.page_content for doc in seen_parents_text_content])
+            print(combined_context)
+
+            top_parent = seen_parents_payloads[0]
+            image_to_send  = images_and_descriptions[0]["image"] if images_and_descriptions else ""
+            trimmed_history = self.trimer.invoke(self.chat_history.messages)
+
+            if not seen_parents_payloads or not seen_parents_payloads[0].get('full_text'):
+                return {"headline": "Error", "answer": "No context found to analyze.", "confidence_score": 0}
+
+            prompt_text = self.base_prompt.format(
+                context=combined_context,
+                question=query_str,
+                history=trimmed_history
+            )
+
+            print("--------------------STARTING GENERATION---------------------------------")
+
+            if best_score < self.THRESHOLD and self.reranker_scores_report(scores).get('median_scores') < 0.1:
+                print(f"⚠️ Low Confidence ({best_score:.4f}): Aborting.")
+                return {
+                    "headline": "No Direct Match Found",
+                    "answer": "I found some articles, but nothing specifically answering your question.",
+                    "confidence_score": best_score,
+                    "image_b64": ""
+                }
+
+
+            base_text = ""
+            try:
+                chat_completion = await self.groq_client.chat.completions.create(
+                    messages=self.create_message(prompt_text,image_to_send),
+                    model=self.model_id,
+                    **self.base_model_kwargs
+                )
+
+                async for chunk in chat_completion:
+                    if chunk.choices[0].delta.content:
+                        token = chunk.choices[0].delta.content
+                        base_text += token
+                        print(token, end="", flush=True)
+
+                print('--------------starting judge--------------------------------')
+
+                judge_prompt_text = self.critique_chain.format(
+                    context=combined_context,
+                    question=query_str,
+                    answer=base_text
+                )
+
+
+                judge_completion = await self.groq_client.chat.completions.create(
+                    messages=self.create_message(judge_prompt_text, image_to_send.split(",")[-1]),
+                    model=self.model_id,
+                    **self.judge_model_kwargs
+                )
+                final_answer = ""
+                async for chunk in judge_completion:
+                    if chunk.choices[0].delta.content:
+                        token = chunk.choices[0].delta.content
+                        final_answer += token
+                        print(token, end="", flush=True)
+
+                print("\n✅ Generation Finished.")
+
+
+            except (asyncio.TimeoutError, Exception) as e:
+                self.chat_history.clear()
+                print(f"⚠️ Multimodal Fail ({repr(e)}). Switching to Text-Only Stability Mode...")
+
+                final_answer = "⚠️ System is unresponsive. Please try again."
+
+
+            if "⚠️" not in final_answer:
+                self.chat_history.add_user_message(query_str)
+                self.chat_history.add_ai_message(final_answer)
+            final_answer = final_answer.strip()
+            if final_answer.lower().startswith("here is"):
+                final_answer = "\n".join(final_answer.split("\n")[1:]).strip()
+                final_answer = final_answer.replace("*", "")
+
+
+
+            print("--- 🕵️ FULL PROMPT DUMP ---")
+            print(f"DEBUG: combined_context length: {len(combined_context)}")
+            print(f"DEBUG: image_b64 length: {len(image_to_send)}")
+            print(f"DEBUG: history_data object size: {len(str(trimmed_history))}")
+            print(f"DEBUG: best score: {best_score}")
+            print(f"DEBUG: num of articles: {len(sources)}")
+            print(f"DEBUG: base generation text: {base_text}, len: {len(base_text)}")
+            print(f"DEBUG: final generation text(judge): {final_answer}, len: {len(final_answer)}")
+            print("image_description:", images_and_descriptions[0]["description"] if images_and_descriptions else "No diagrams found.")
+            report = self.reranker_scores_report(scores) or {}
+            print(f"📊 Reranker Health: Best={report.get('max_scores'):.4f}, "
+                  f"Median={report.get('median_scores'):.4f}, "
+                  f"iqr={report.get('iqr'):.4f}")
+
+
+            response_data= {
+                "headline": top_parent.get('headline', 'Untitled'),
+                "answer": final_answer,
+                "image_b64": image_to_send,
+                "image_description": images_and_descriptions[0]["description"] if images_and_descriptions else "No diagrams found."
+,               "gallery": images_and_descriptions,
+                "url": top_parent.get('url', '#'),
+                "type": top_parent.get('type'),
+                "full_text": top_parent['full_text'],
+                "confidence_score": self.reranker_scores_report(scores).get('median_scores'),
+                "sources": sources,
+                "context_text":[d.page_content for d in seen_parents_text_content],
+                "generation_variations":[str(q) for q in queries]
+            }
+            print(f"DEBUG: Attempting to cache ID: {hashlib.md5(query_str.encode()).hexdigest()}")
+            if "⚠️" not in final_answer:
+                await self.set_semantic_cache(query_str, response_data)
+            print(f"🔓 Lock Released for query: {query_str}")
+        return response_data
+
+    async def refine_answer(self, question: str, original_answer: str, contexts: list, img):
+        """Refines a hallucinated answer using a strict critique prompt."""
+        context_block = "\n---\n".join([str(c) for c in contexts])
+        refine_prompt = f"""
+           You are a strict Machine Learning Tutor. 
+           The original answer below was flagged for containing information NOT found in the notes.
+
+           QUESTION: {question}
+           ORIGINAL ANSWER: {original_answer}
+
+           STRICT CONTEXT FROM NOTES:
+           {context_block}
+
+           TASK:
+           Rewrite the answer. Use ONLY the facts provided in the context above. 
+           If the context does not contain the answer, say 'I cannot verify this in my notes.'
+           Keep the tone helpful but extremely literal.
+           """
+
+        refined_prompt = self.create_message(refine_prompt, img)
+        judge_completion = await self.groq_client.chat.completions.create(
+            messages=refined_prompt,
+            model=self.model_id,
+            **self.judge_model_kwargs
+        )
+        response = ""
+        async for chunk in judge_completion:
+            if chunk.choices[0].delta.content:
+                token = chunk.choices[0].delta.content
+                response += token
+                print(token, end="", flush=True)
+        return response
+
+
+

@@ -1,0 +1,54 @@
+# --- Core Framework ---
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-ollama
+langchain-text-splitters
+
+# --- LLM & Embeddings ---
+langchain-ollama
+langchain-huggingface
+sentence-transformers
+langchain-qdrant
+qdrant-client
+fastembed
+
+langchain-community
+# Note: On Windows, simple torch install is often safer
+#torch
+--extra-index-url https://download.pytorch.org/whl/cpu #dowload loghtweight version (cpu)
+torch
+
+# --- Data Loading & Connectors ---
+playwright
+bs4
+Pillow
+unstructured
+python-magic
+
+# --- MLOps & Utilities ---
+pydantic-settings
+python-dotenv
+python-multipart
+pandas
+
+
+#api
+fastapi
+websockets
+uvicorn[standard]
+jinja2
+streamlit
+
+#Cross-Encoder
+sentence-transformers
+
+#ragas
+ragas
+datasets
+
+matplotlib
+seaborn
+eval_type_backport
+rouge-score
+nltk
+

@@ -1,0 +1,10 @@
+.env
+__pycache__/
+.venv/
+.idea
+.qdrant_storage/
+*.py[cod]
+src/monitoring_DB/*.db
+hf_cache/
+.DS_Store
+Thumbs.db
