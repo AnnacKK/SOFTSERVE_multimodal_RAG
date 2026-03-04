@@ -1,5 +1,10 @@
-.venv
+.venv/
 __pycache__
-.git
 .env
-.rag_metrics.DB
+src/monitoring_DB/*.db
+*.pyc
+.git/
+.idea/
+.vscode/
+.documentation/
+qdrant_storage/

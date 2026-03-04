@@ -7,6 +7,7 @@ class RAGConfig(BaseSettings):
     CHILD_COLL: str = "the_batch_children"
     PARENT_COLL: str = "the_batch_parents"
 
+
     QDRANT_URL: str = "http://qdrant_db:6333"
     GR_TOKEN: str
     QDRANT_TIMEOUT: int = 30

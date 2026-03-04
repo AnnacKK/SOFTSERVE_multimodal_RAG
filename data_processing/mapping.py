@@ -18,7 +18,7 @@ HEADERS = {
 qdrant_host = os.getenv("QDRANT_HOST", "localhost")
 qdrant_port = 6333
 
-client = QdrantClient(host=qdrant_host, port=qdrant_port)
+client = QdrantClient(host=qdrant_host, port=qdrant_port,timeout=60)
 
 
 CATEGORIES = {
@@ -32,7 +32,7 @@ CATEGORIES = {
 
 class QdrantScrapping:
     def __init__(self):
-        self.client = QdrantClient(host="localhost", port=6333, timeout=60)
+        self.client = client
         self.parent_splitter = RecursiveCharacterTextSplitter(
             chunk_size=2000,
             chunk_overlap=200,

@@ -35,9 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy installed libraries
 COPY --from=builder /root/.local /root/.local
 # Copy project structure
-COPY ./src ./src
-COPY ./api.py .
-COPY ./templates ./templates
+COPY . .
 
 # Environment setup
 ENV PATH=/root/.local/bin:$PATH

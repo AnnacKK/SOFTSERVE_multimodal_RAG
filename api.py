@@ -74,7 +74,7 @@ def clean_ragas_scores(raw_scores: dict) -> dict:
     return cleaned
 
 rllm = ChatOllama(
-#base_url=config.OlLAMA_URL_COLLAB,
+    base_url=config.OLLAMA_BASE_URL,
     model="qwen2.5:1.5b",
     #headers={"ngrok-skip-browser-warning": "true"},
     temperature=0,
@@ -255,4 +255,4 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

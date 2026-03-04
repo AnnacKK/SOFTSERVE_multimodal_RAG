@@ -3,6 +3,7 @@ langchain>=0.3.0
 langchain-community>=0.3.0
 langchain-ollama
 langchain-text-splitters
+langchain_core
 
 # --- LLM & Embeddings ---
 langchain-ollama
@@ -11,6 +12,12 @@ sentence-transformers
 langchain-qdrant
 qdrant-client
 fastembed
+langchain-groq
+
+groq
+
+nest-asyncio
+httpx
 
 langchain-community
 # Note: On Windows, simple torch install is often safer

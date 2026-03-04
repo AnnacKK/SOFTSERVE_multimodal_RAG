@@ -24,13 +24,14 @@ from io import BytesIO
 from PIL import Image
 import nest_asyncio
 nest_asyncio.apply()
-from langchain.schema import Document
+from langchain_core.documents import Document
 import re
 import httpx
 import json
 from huggingface_hub import AsyncInferenceClient # pip install huggingface_hub
 from qdrant_client import AsyncQdrantClient, models
 from groq import AsyncGroq
+from langchain_groq import ChatGroq
 
 # stabilize tunnel
 stable_client = httpx.AsyncClient(
@@ -47,17 +48,17 @@ stable_client = httpx.AsyncClient(
 qdrant_host = os.getenv("QDRANT_HOST", "localhost")
 qdrant_port = 6333
 
-client = QdrantClient(host=qdrant_host, port=qdrant_port)
+
 
 
 
 class MultimodalRAG:
     def __init__(self):
-        self.client = client
+        print(f"📡 DEBUG: Connecting to Qdrant at: {config.QDRANT_URL}")
+        self.client = AsyncQdrantClient(url=config.QDRANT_URL, timeout=60)
         self.text_model = SentenceTransformer(config.TEXT_MODEL_NAME,device='cpu')
         self.vision_model = SentenceTransformer(config.IMAGE_MODEL_NAME,device='cpu',model_kwargs={"use_fast": True})
         self.reranker = CrossEncoder(config.RERANKER_NAME,device='cpu',activation_fn=nn.Sigmoid())
-        self.ollama_client = Client(host='http://127.0.0.1:11434')
         self.lock = asyncio.Semaphore(1)
         self.CHILD_COLL = config.CHILD_COLL
         self.PARENT_COLL = config.PARENT_COLL
@@ -82,34 +83,41 @@ class MultimodalRAG:
             "frequency_penalty": 0.5,
         }
 
-        self.llm = ChatOllama(
-            base_url=config.OlLAMA_URL_COLLAB,
-            model="llama3.2-vision:11b",
-            temperature=0.3,
-            num_ctx=2048,
-            repeat_penalty=1.3,
-            top_p=0.9,num_thread=4,
-            timeout=300,
-                    )
+        # self.llm = ChatOllama(
+        #     base_url=config.OlLAMA_URL_COLLAB,
+        #     model="llama3.2-vision:11b",
+        #     temperature=0.3,
+        #     num_ctx=2048,
+        #     repeat_penalty=1.3,
+        #     top_p=0.9,num_thread=4,
+        #     timeout=300,
+        #             )
+        self.groq_llm = ChatGroq(
+            api_key=self.groq_key,
+            model_name=self.model_id
+        )
         self.sparse_model = SparseTextEmbedding(model_name=config.SPARSE_MODEL_NAME)
         self.chat_history = ChatMessageHistory()
 
         self.trimer = trim_messages(
             max_tokens=600,
             strategy="last",
-            token_counter=self.llm,
+            token_counter=self.groq_llm,
             start_on="human",
             include_system=True
         )
 
-        self.variations_llama = ChatOllama(model=config.VARIATIONS_LLAMA_MODEL_NAME,temperature=0.6)
+        self.variations_llama = ChatOllama(
+            base_url=config.OLLAMA_BASE_URL,
+            model=config.VARIATIONS_LLAMA_MODEL_NAME,
+            temperature=0.6)
         self.base_prompt=prompts.base_prompt
         self.critique_chain = prompts.critique_chain
         self.query_expansion = (prompts.query_expansion | self.variations_llama | StrOutputParser())
 
 
         self.semantic_cache = {}
-        self.cache_client = AsyncQdrantClient(url=config.QDRANT_URL)
+        self.cache_client = self.client
         self.cache_collection = "llm_cache"
         # Check if cache collection exists, if not, create it
         self._cache_initialized = False
@@ -232,6 +240,7 @@ class MultimodalRAG:
                 print("✅ Collection Created Successfully")
         except Exception as e:
             print(f"⚠️ Cache Re-Init Failed: {e}")
+            self._cache_initialized = False
 
 
 
@@ -303,7 +312,6 @@ class MultimodalRAG:
             return [original_question]
 
     async def run_hybrid_rag(self,query_str,bypass_cache:bool=False, category=None, mode="Hybrid"):
-        print("RUNNING ON CLOUD")
         if not bypass_cache:
             cached = await self.get_semantic_cache(query_str)
             if cached:
@@ -342,13 +350,13 @@ class MultimodalRAG:
                 )
 
                 if mode == "Visual":
-                    results = await self.client.query_points(collection_name=self.CHILD_COLL, query=i_query, using="image",
+                    results =  await self.client.query_points(collection_name=self.CHILD_COLL, query=i_query, using="image",
                                                              query_filter=query_filter, limit=config.RERANKER_K)
                 elif mode == "Text":
                     results = await self.client.query_points(collection_name=self.CHILD_COLL, query=q, using="text",
                                                        query_filter=query_filter, limit=config.RERANKER_K)
                 else:
-                    results = await self.client.query_points(
+                    results =await  self.client.query_points(
                         collection_name=self.CHILD_COLL,
                         prefetch=[
                             models.Prefetch(query=t_query, using="text", limit=10),
