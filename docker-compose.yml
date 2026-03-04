@@ -41,8 +41,13 @@ services:
     command: streamlit run dashboard.py --server.port 8501 --server.address 0.0.0.0
     ports:
       - "8501:8501"
+    volumes:
+      - .:/app
+      - ./src/monitoring_db:/app/src/monitoring_db
     environment:
-      - API_URL=http://rag-api:8000
+        - API_URL=http://rag-api:8000
+        # 🟢 Ensure the dashboard knows where to look
+        - MONITORING_DB_PATH=/app/src/monitoring_db/logs.db
     depends_on:
       rag-api:
         condition: service_healthy

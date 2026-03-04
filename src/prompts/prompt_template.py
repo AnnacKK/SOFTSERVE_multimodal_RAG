@@ -1,5 +1,4 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from langchain_core.prompts import ChatPromptTemplate,PromptTemplate,MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate,MessagesPlaceholder
 
 class Prompt:
     base_prompt = ChatPromptTemplate.from_messages([

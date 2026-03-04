@@ -1,9 +1,7 @@
-import ollama
 import asyncio
 
-from ollama import Client
 from langchain_ollama import ChatOllama
-from qdrant_client import QdrantClient, models
+from qdrant_client import models
 from sentence_transformers import SentenceTransformer,CrossEncoder
 from src.config import config
 import os
@@ -11,25 +9,17 @@ from src.prompts.prompt_template import prompts
 from langchain_core.output_parsers import StrOutputParser
 import numpy as np
 from torch import nn
-from langchain_core.prompts import ChatPromptTemplate
-from qdrant_client import AsyncQdrantClient, models
+from qdrant_client import AsyncQdrantClient
 import httpx
 from fastembed import SparseTextEmbedding
-from langchain_core.messages import HumanMessage, AIMessage, trim_messages
+from langchain_core.messages import trim_messages
 from langchain_community.chat_message_histories import ChatMessageHistory
 from qdrant_client.http.models import PointStruct
 import hashlib
-import base64
-from io import BytesIO
-from PIL import Image
 import nest_asyncio
 nest_asyncio.apply()
 from langchain_core.documents import Document
 import re
-import httpx
-import json
-from huggingface_hub import AsyncInferenceClient # pip install huggingface_hub
-from qdrant_client import AsyncQdrantClient, models
 from groq import AsyncGroq
 from langchain_groq import ChatGroq
 
@@ -147,15 +137,25 @@ class MultimodalRAG:
                 "q1":q1,"q3":q3, "iqr":iqr}
         return report
 
-    def create_message(self,prompt,image):
+    def create_message(self,prompt,images):
+        if isinstance(images, str):
+            images = [images]
+
+            # Filter out empty or too-short strings
+        valid_images = [img for img in images if img and len(img) > 100]
+
+        content = [{"type": "text", "text": prompt}]
+
+        # Append all valid images to the content list
+        for img in valid_images:
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{img}"}
+            })
         message = [
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{image}"}}]}]
+                "content": content}]
         return message
 
     def clean_newsletter_text(self, text: str) -> str:
@@ -457,7 +457,6 @@ class MultimodalRAG:
             print(combined_context)
 
             top_parent = seen_parents_payloads[0]
-            image_to_send  = images_and_descriptions[0]["image"] if images_and_descriptions else ""
             trimmed_history = self.trimer.invoke(self.chat_history.messages)
 
             if not seen_parents_payloads or not seen_parents_payloads[0].get('full_text'):
@@ -484,7 +483,7 @@ class MultimodalRAG:
             base_text = ""
             try:
                 chat_completion = await self.groq_client.chat.completions.create(
-                    messages=self.create_message(prompt_text,image_to_send),
+                    messages=self.create_message(prompt_text,images_and_descriptions),
                     model=self.model_id,
                     **self.base_model_kwargs
                 )
@@ -505,7 +504,7 @@ class MultimodalRAG:
 
 
                 judge_completion = await self.groq_client.chat.completions.create(
-                    messages=self.create_message(judge_prompt_text, image_to_send.split(",")[-1]),
+                    messages=self.create_message(judge_prompt_text, images_and_descriptions),
                     model=self.model_id,
                     **self.judge_model_kwargs
                 )
@@ -538,7 +537,6 @@ class MultimodalRAG:
 
             print("--- 🕵️ FULL PROMPT DUMP ---")
             print(f"DEBUG: combined_context length: {len(combined_context)}")
-            print(f"DEBUG: image_b64 length: {len(image_to_send)}")
             print(f"DEBUG: history_data object size: {len(str(trimmed_history))}")
             print(f"DEBUG: best score: {best_score}")
             print(f"DEBUG: num of articles: {len(sources)}")
@@ -554,7 +552,6 @@ class MultimodalRAG:
             response_data= {
                 "headline": top_parent.get('headline', 'Untitled'),
                 "answer": final_answer,
-                "image_b64": image_to_send,
                 "image_description": images_and_descriptions[0]["description"] if images_and_descriptions else "No diagrams found."
 ,               "gallery": images_and_descriptions,
                 "url": top_parent.get('url', '#'),

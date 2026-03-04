@@ -1,6 +1,5 @@
 # src/config.py
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import os
 
 
 class RAGConfig(BaseSettings):

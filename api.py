@@ -133,7 +133,7 @@ async def audit_and_push_correction(question, initial_result, websocket):
                     question,
                     initial_result["answer"],
                     final_contexts,
-                    initial_result["image"]
+                    initial_result["gallery"]
 
                 )
 
@@ -225,8 +225,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 "type": "metadata",
                 "headline": result.get("headline") or "Search Result",
                 "confidence": result.get("confidence_score", 0),
-                "image": result.get("image_b64"),
-                "image_description": result.get("image_description"),
+                #"image_description": result.get("image_description"),
                 "sources": result.get("sources")
             })
 
@@ -235,9 +234,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 "answer": result["answer"],
                 "headline": result.get("headline") or "Search Result",
                 "confidence": result.get("confidence_score", 0),
-                "image": result.get("image_b64"),
                 "gallery": result.get("gallery"),
-                "image_description": result.get("image_description"),
+                #"image_description": result.get("image_description"),
                 "sources": result.get("sources")
             })
 

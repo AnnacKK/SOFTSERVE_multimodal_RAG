@@ -1,16 +1,10 @@
-import asyncio
 from datasets import Dataset
-from ragas import evaluate, RunConfig,aevaluate
+from ragas import RunConfig,aevaluate
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.metrics import Faithfulness, AnswerRelevancy,ContextUtilization
-import math
-from langchain_ollama import ChatOllama
-from langchain_huggingface import HuggingFaceEmbeddings
-from src.config import config
 
 from rouge_score import rouge_scorer
-import nltk
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
 import re
@@ -134,7 +128,7 @@ class Evaluator:
         dataset = Dataset.from_dict(data)
 
 
-        print(f"🧐 Production Monitor: Auditing answer for Hallucinations...")
+        print("🧐 Production Monitor: Auditing answer for Hallucinations...")
         try:
 
             ragas_metrics =await aevaluate(
