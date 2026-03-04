@@ -10,21 +10,32 @@ jobs:
   # 🧹 Gate 1: Logic, Style, & Modernization (Ruff)
   quality-check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # 🟢 REQUIRED: Allows GitHub to push the cleaned code back
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }} # Ensures we are on the right branch
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
-      - name: Run Ruff
+      - name: Run Ruff Auto-Fix
         run: |
           pip install ruff
-          # Ruff: The 2026 industry standard for MLOps linting/formatting
-          ruff check src/
-          ruff format src/ --check
+          # 🪄 Force fix logic AND formatting automatically
+          ruff check src/ --fix --unsafe-fixes
+          ruff format src/
+
+      # 🚀 THE MAGIC STEP: Commit the changes back to your repo
+      - name: Commit and Push Fixes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "🤖 chore: automated ruff quality fixes"
+          branch: ${{ github.head_ref || github.ref_name }}
 
   # 🧪 Gate 2: Functional Testing (Pytest)
   test:
