@@ -15,6 +15,7 @@ fastembed
 langchain-groq
 
 groq
+giskard #testing
 
 nest-asyncio
 httpx
