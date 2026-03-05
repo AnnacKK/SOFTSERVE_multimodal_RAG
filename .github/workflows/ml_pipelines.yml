@@ -31,7 +31,7 @@ jobs:
       - name: Commit and Push Fixes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "🤖 chore: automated ruff quality fixes [skip ci]"
+          commit_message: "🤖 chore: automated ruff quality fixes"
           branch: ${{ github.head_ref || github.ref_name }}
 
   test:
@@ -70,18 +70,6 @@ jobs:
           # Find and remove null bytes in all python files in src/tests/
           find src/tests/ -name "*.py" -exec sed -i 's/\x00//g' {} +
           
-
-      - name: Restore Mini Snapshot
-        run: |
-            # 1. Upload the small file already present in the repo
-            curl -X POST "http://localhost:6333/collections/the_batch_children/snapshots/upload" \
-                 -H "Content-Type: multipart/form-data" \
-                 -F "snapshot=@src/tests/data/the_batch_children.snapshot"
-            
-            # 2. Recover the collection
-            curl -X POST "http://localhost:6333/collections/the_batch_children/snapshots/recover" \
-                 -H "Content-Type: application/json" \
-                 -d '{"location": "the_batch_children.snapshot"}'
 
       - name: Run Giskard & Judicial Tests
         env:
