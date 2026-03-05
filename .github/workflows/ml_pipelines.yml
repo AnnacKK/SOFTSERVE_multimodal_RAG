@@ -72,7 +72,7 @@ jobs:
         env:
           QDRANT_URL: http://localhost:6333
           OLLAMA_BASE_URL: http://localhost:11434
-        run: pytest src/tests/test_giskard.py
+        run: pytest src/tests/test_rag.py
       - name: Upload Giskard Report
         if: always()
         uses: actions/upload-artifact@v4
