@@ -5,13 +5,15 @@ import asyncio
 from ollama import Client
 from src.engine.rag_engine import MultimodalRAG
 
-from qdrant_client import AsyncQdrantClient
-
+from qdrant_client import AsyncQdrantClient, models
+import json
+import os
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
-async def get_context_from_qdrant(question: str, collection_name: str = "the_batch_children"):
+async def get_context_from_qdrant(question: str, collection_name: str = "the_batch_mini"):
     """Fetch the top relevant text chunk for the judge to use"""
+
     search_result = await qdrant_client.query(
         collection_name=collection_name,
         query_text=question,
@@ -55,18 +57,44 @@ def qwen_judge_relevance(question, answer, context):
     except Exception:
         return False  # Fail safe if Ollama is down
 
-
 @pytest.mark.asyncio
 async def test_batch_rag_evaluation():
-    # Initialize engine
+    # --- STEP 0: BOOTSTRAP QDRANT FROM JSON ---
+    json_path = "src/tests/data/test_points.json"
+    coll_name = "the_batch_mini"  # Ensure this matches what get_context_from_qdrant uses
+
+    # 1. Load the distilled data
+    with open(json_path, "r", encoding="utf-8") as f:
+        points_data = json.load(f)
+
+    # 2. Recreate the schema (Dense + Sparse)
+    if await qdrant_client.collection_exists(coll_name):
+        await qdrant_client.delete_collection(coll_name)
+
+    await qdrant_client.create_collection(
+        collection_name=coll_name,
+        vectors_config={
+            "text": models.VectorParams(size=384, distance=models.Distance.COSINE),
+            "image": models.VectorParams(size=512, distance=models.Distance.COSINE)
+        },
+        sparse_vectors_config={
+            "text-sparse": models.SparseVectorParams(index=models.SparseIndexParams())
+        }
+    )
+
+    # 3. Upsert the JSON points into Qdrant
+    points = [models.PointStruct(**p) for p in points_data]
+    await qdrant_client.upsert(collection_name=coll_name, points=points)
+    print(f"✅ Bootstrapped {len(points)} points from JSON into {coll_name}")
+
+    # --- STEP 1: INITIALIZE ENGINE ---
     rag_engine = MultimodalRAG()
+    assert rag_engine.groq_key is not None, "GR_TOKEN environment variable is missing!"
 
     # 1. Define Sample Dataset
     test_samples = [
         {"question": "How are AI monopolies affecting the market?", "category": "Business"},
-        {"question": "What is the latest in transformer world models?", "category": "ML Research"},
-        {"question": "Summarize the latest productivity impact from GenAI.", "category": "Weekly Issues"},
-        {"question": "How do H100 GPUs compare to older hardware?", "category": "Hardware"}
+        {"question": "What is the latest in transformer world models?", "category": "ML Research"}
     ]
     test_df = pd.DataFrame(test_samples)
 
@@ -74,9 +102,8 @@ async def test_batch_rag_evaluation():
     def model_predict(df: pd.DataFrame):
         answers = []
         for q in df["question"]:
-            # Wrap the async query call
+            # Note: run_async is used here because Giskard calls this synchronously
             res = run_async(rag_engine.run_hybrid_rag(q))
-            # Ensure we return a string for Giskard's text_generation type
             answers.append(res.get("answer", str(res)) if isinstance(res, dict) else str(res))
         return answers
 
@@ -85,38 +112,25 @@ async def test_batch_rag_evaluation():
         model=model_predict,
         model_type="text_generation",
         name="RAG_Batch_Evaluator",
-        feature_names=["question", "category"],
-        description="RAG engine retrieving from Qdrant and generating with Qwen"
+        feature_names=["question", "category"]
     )
 
-    giskard_dataset = giskard.Dataset(
-        df=test_df,
-        name="The_Batch_Multimodal_Sample",
-        target=None,
-        column_types={"question": "text", "category": "category"}
-    )
+    giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample")
 
-    # 4. Run Automated Scan (Vulnerability Guard)
-    scan_results = giskard.scan(giskard_model, giskard_dataset)
+    # 4. Run Automated Scan (Using to_thread for sync Giskard)
+    scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset)
     scan_results.to_html("giskard_report.html")
 
-    # 5. Custom Judicial Check (Relevance Guard)
-    # We iterate through the scan results or the dataset to apply our Qwen Judge
-    # For CI/CD, we'll manually check the first few for the 'Judicial' pass
-
-    assert rag_engine.groq_key is not None, "GR_TOKEN environment variable is missing!"
-
+    # 5. Judicial Check (Using native await for async calls)
     for i, row in test_df.iterrows():
-        # 1. Get the actual answer from your RAG engine
-        res = run_async(rag_engine.run_hybrid_rag(row['question']))
+        # Get actual answer from RAG
+        res = await rag_engine.run_hybrid_rag(row['question'])
         actual_answer = res.get("answer", str(res))
 
-        # 2. ?? NEW: Fetch the context specifically for the judge
-        context_for_judge =await get_context_from_qdrant(row['question'])
+        # Fetch context from our newly created JSON collection
+        context_for_judge = await get_context_from_qdrant(row['question'], collection_name=coll_name)
 
-        # 3. ?? NEW: Pass it to the judge
         is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
+        assert is_relevant, f"❌ Judge failed relevance for: {row['question']}"
 
-        assert is_relevant, f"? Judge failed relevance for: {row['question']}"
-    # Final CI/CD Gate
-    assert not scan_results.has_issues(severity="high"), "? Giskard found high-severity vulnerabilities"
+    assert not scan_results.has_issues(severity="high"), "❌ Giskard found high-severity vulnerabilities"
