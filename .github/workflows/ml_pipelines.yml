@@ -7,7 +7,6 @@ on:
     branches: [ main ]
 
 jobs:
-  # 🧹 Gate 1: Logic, Style, & Modernization (Ruff)
   quality-check:
     runs-on: ubuntu-latest
     permissions:
@@ -35,7 +34,6 @@ jobs:
           commit_message: "🤖 chore: automated ruff quality fixes [skip ci]"
           branch: ${{ github.head_ref || github.ref_name }}
 
-  # 🧪 Gate 2: Functional Testing (Pytest)
   test:
     needs: [quality-check]
     runs-on: ubuntu-latest
@@ -67,6 +65,10 @@ jobs:
             # Wait for server to wake up and pull model
             sleep 10
             ollama pull qwen2.5:1.5b
+      - name: Sanitize Test Files
+        run: |
+          # Find and remove null bytes in all python files in src/tests/
+          find src/tests/ -name "*.py" -exec sed -i 's/\x00//g' {} +
 
       - name: Run Giskard & Judicial Tests
         env:
