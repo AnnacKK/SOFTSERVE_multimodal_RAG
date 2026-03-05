@@ -7,84 +7,69 @@ on:
     branches: [ main ]
 
 jobs:
-  quality-check:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+  jobs:
+    test-and-lint:
+      runs-on: ubuntu-latest
+      services:
+        qdrant:
+          image: qdrant/qdrant:latest
+          ports:
+            - 6333:6333
+      permissions:
+        contents: write
+      steps:
+        - name: Checkout Code
+          uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
+        - name: Set up Python
+          uses: actions/setup-python@v5
+          with:
+            python-version: '3.9'
+            cache: 'pip'
 
-      - name: Run Ruff Auto-Fix
-        continue-on-error: true
-        run: |
-          pip install ruff
-          # 🪄 --unsafe-fixes is the key to fixing E402 and E722 automatically
-          ruff check src/ --fix --unsafe-fixes
-          ruff format src/
+        # 1. Lint and Auto-Fix
+        - name: Run Ruff Auto-Fix
+          continue-on-error: true
+          run: |
+            pip install ruff
+            ruff check src/ --fix --unsafe-fixes
+            ruff format src/
 
-      - name: Commit and Push Fixes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "🤖 chore: automated ruff quality fixes"
-          branch: ${{ github.head_ref || github.ref_name }}
+        # 2. Setup Environment
+        - name: Install Dependencies
+          run: |
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt pytest pytest-asyncio
 
-  test:
-    needs: [quality-check]
-    runs-on: ubuntu-latest
-    services:
-      qdrant:
-        image: qdrant/qdrant:latest
-        ports:
-          - 6333:6333
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-          cache: 'pip'
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio
-      - name: Install & Background Ollama
-        run: |
+        - name: Install & Background Ollama
+          run: |
             curl -fsSL https://ollama.com/install.sh | sh
-            # Start Ollama in background and redirect logs
             nohup ollama serve > ollama.log 2>&1 &
-            # Wait for server to wake up and pull model
             sleep 10
             ollama pull qwen2.5:1.5b
-      - name: Sanitize Test Files
-        run: |
-          # Find and remove null bytes in all python files in src/tests/
-          find src/tests/ -name "*.py" -exec sed -i 's/\x00//g' {} +
-          
 
-      - name: Run Giskard & Judicial Tests
-        env:
-          QDRANT_URL: http://localhost:6333
-          OLLAMA_BASE_URL: http://localhost:11434
-          PYTHONPATH: ${{ github.workspace }}
-          GR_TOKEN: ${{ secrets.GR_TOKEN }}
-        run: pytest src/tests/test_rag.py
-      - name: Upload Giskard Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
+        # 3. Run Tests (This will now run every time)
+        - name: Run Giskard & Judicial Tests
+          env:
+            QDRANT_URL: http://localhost:6333
+            OLLAMA_BASE_URL: http://localhost:11434
+            PYTHONPATH: ${{ github.workspace }}
+            GR_TOKEN: ${{ secrets.GR_TOKEN }}
+          run: pytest src/tests/test_rag.py
+
+        # 4. Push fixes ONLY after tests pass
+        - name: Commit and Push Fixes
+          if: success()
+          uses: stefanzweifel/git-auto-commit-action@v5
+          with:
+            commit_message: "🤖 chore: automated ruff quality fixes"
+
+        - name: Upload Giskard Report
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
             name: giskard-report
             path: giskard_report.html
-
 
   build-and-push:
     needs: [test]
