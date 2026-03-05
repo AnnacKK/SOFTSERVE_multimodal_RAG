@@ -104,13 +104,15 @@ async def test_batch_rag_evaluation():
     # We iterate through the scan results or the dataset to apply our Qwen Judge
     # For CI/CD, we'll manually check the first few for the 'Judicial' pass
 
+    assert rag_engine.groq_key is not None, "GR_TOKEN environment variable is missing!"
+
     for i, row in test_df.iterrows():
         # 1. Get the actual answer from your RAG engine
         res = run_async(rag_engine.run_hybrid_rag(row['question']))
         actual_answer = res.get("answer", str(res))
 
         # 2. ?? NEW: Fetch the context specifically for the judge
-        context_for_judge = get_context_from_qdrant(row['question'])
+        context_for_judge =await get_context_from_qdrant(row['question'])
 
         # 3. ?? NEW: Pass it to the judge
         is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
