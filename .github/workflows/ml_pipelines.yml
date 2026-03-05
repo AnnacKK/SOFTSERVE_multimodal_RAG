@@ -74,6 +74,7 @@ jobs:
         env:
           QDRANT_URL: http://localhost:6333
           OLLAMA_BASE_URL: http://localhost:11434
+          PYTHONPATH: ${{ github.workspace }}
         run: pytest src/tests/test_rag.py
       - name: Upload Giskard Report
         if: always()

@@ -4,13 +4,13 @@ import pandas as pd
 import asyncio
 from ollama import Client
 from src.engine.rag_engine import MultimodalRAG
-from src.config import config
+
 from qdrant_client import AsyncQdrantClient
 
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
-async def get_context_from_qdrant(question: str, collection_name: str = config.CHILD_COLL):
+async def get_context_from_qdrant(question: str, collection_name: str = "the_batch_children"):
     """Fetch the top relevant text chunk for the judge to use"""
     search_result = await qdrant_client.query(
         collection_name=collection_name,
