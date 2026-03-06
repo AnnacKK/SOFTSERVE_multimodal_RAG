@@ -26,14 +26,12 @@ jobs:
           python-version: '3.9'
           cache: 'pip'
 
-
       - name: Run Ruff Auto-Fix
         continue-on-error: true
         run: |
           pip install ruff
           ruff check src/ --fix --unsafe-fixes
           ruff format src/
-
 
       - name: Install Dependencies
         run: |
@@ -46,7 +44,8 @@ jobs:
           nohup ollama serve > ollama.log 2>&1 &
           sleep 10
           ollama pull qwen2.5:1.5b
-  tests:
+
+
       - name: Run Giskard & judge Test
         env:
           QDRANT_URL: http://localhost:6333
@@ -55,12 +54,12 @@ jobs:
           GR_TOKEN: ${{ secrets.GR_TOKEN }}
         run: pytest src/tests/test_rag.py
 
-  push:
+
       - name: Commit and Push Fixes
         if: success()
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "🤖 push succesfull"
+          commit_message: "🤖 push successful"
 
       - name: Upload Giskard Report
         if: always()
