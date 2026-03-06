@@ -4,10 +4,12 @@ import pandas as pd
 import asyncio
 from ollama import Client
 from src.engine.rag_engine import MultimodalRAG
+import os
 
 from qdrant_client import AsyncQdrantClient, models
 import json
 from giskard.llm.client.ollama import OllamaClient
+from giskard.llm.client.litellm import LiteLLMClient
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
@@ -141,7 +143,10 @@ async def test_batch_rag_evaluation():
         return answers
 
     # 3. Wrap for Giskard
-    ollama_llm = OllamaClient(model="qwen2.5:1.5b", base_url="http://localhost:11434")
+    ollama_llm = LiteLLMClient(
+    model="openai/gpt-oss-safeguard-20b",
+    api_key=os.getenv("GR_TOKEN")
+)
     giskard_model = giskard.Model(
         model=model_predict,
         model_type="text_generation",
