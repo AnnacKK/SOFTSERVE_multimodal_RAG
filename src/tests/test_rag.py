@@ -7,7 +7,6 @@ from src.engine.rag_engine import MultimodalRAG
 
 from qdrant_client import AsyncQdrantClient, models
 import json
-import giskard
 from giskard.llm.client.ollama import OllamaClient
 
 
