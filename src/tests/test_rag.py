@@ -11,11 +11,11 @@ import os
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
-async def get_context_from_qdrant(question: str, collection_name: str = "the_batch_mini"):
+async def get_context_from_qdrant(question: str, collection_name_child: str = "the_batch_mini"):
     """Fetch the top relevant text chunk for the judge to use"""
 
     search_result = await qdrant_client.query(
-        collection_name=collection_name,
+        collection_name=collection_name_child,
         query_text=question,
         limit=5
     )
@@ -57,22 +57,35 @@ def qwen_judge_relevance(question, answer, context):
     except Exception:
         return False
 
-@pytest.mark.asyncio
-async def test_batch_rag_evaluation():
 
-    json_path = "src/tests/data/test_points.json"
-    coll_name = "the_batch_mini"
+async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_coll: str, child_json: str, parent_json: str):
+    """Reconstructs the Child and Parent test databases"""
 
-    # 1. Load the distilled data
-    with open(json_path, "r", encoding="utf-8") as f:
-        points_data = json.load(f)
+    with open(child_json, "r", encoding="utf-8") as f:
+        child_data = json.load(f)
+    with open(parent_json, "r", encoding="utf-8") as f:
+        parent_data = json.load(f)
 
+    # --- RECREATE PARENT COLLECTION (Small-to-Big Target) ---
+    if await client.collection_exists(parent_coll):
+        await client.delete_collection(parent_coll)
 
-    if await qdrant_client.collection_exists(coll_name):
-        await qdrant_client.delete_collection(coll_name)
+    # Parents are retrieved by ID, so we use an empty vectors_config
+    await client.create_collection(
+        collection_name=parent_coll,
+        vectors_config={}
+    )
 
-    await qdrant_client.create_collection(
-        collection_name=coll_name,
+    # Populate Parents
+    parent_points = [models.PointStruct(**p) for p in parent_data]
+    await client.upsert(collection_name=parent_coll, points=parent_points)
+
+    # --- RECREATE CHILD COLLECTION (Vector Search Target) ---
+    if await client.collection_exists(child_coll):
+        await client.delete_collection(child_coll)
+
+    await client.create_collection(
+        collection_name=child_coll,
         vectors_config={
             "text": models.VectorParams(size=384, distance=models.Distance.COSINE),
             "image": models.VectorParams(size=512, distance=models.Distance.COSINE)
@@ -82,13 +95,31 @@ async def test_batch_rag_evaluation():
         }
     )
 
+    # Populate Children
+    child_points = [models.PointStruct(**p) for p in child_data]
+    await client.upsert(collection_name=child_coll, points=child_points)
 
-    points = [models.PointStruct(**p) for p in points_data]
-    await qdrant_client.upsert(collection_name=coll_name, points=points)
-    print(f"✅ Bootstrapped {len(points)} points from JSON into {coll_name}")
+    print(f"✅ Success: Recreated {parent_coll} ({len(parent_points)} pts) and {child_coll} ({len(child_points)} pts)")
+
+
+@pytest.mark.asyncio
+async def test_batch_rag_evaluation():
+
+    child_json = "src/tests/data/test_child.json"
+    parent_json = "src/tests/data/test_parents.json"
+    child_coll = "the_batch_mini"
+    parent_coll = "the_batch_parents_mini"
+
+    await recreate_qdrant(qdrant_client, child_coll, parent_coll)
+
+
+
+
 
 
     rag_engine = MultimodalRAG()
+    rag_engine.collection_name = child_coll
+    rag_engine.PARENT_COLL = parent_coll
     assert rag_engine.groq_key is not None, "GR_TOKEN environment variable is missing!"
 
 
@@ -127,7 +158,7 @@ async def test_batch_rag_evaluation():
         res = await rag_engine.run_hybrid_rag(row['question'])
         actual_answer = res.get("answer", str(res))
 
-        context_for_judge = await get_context_from_qdrant(row['question'], collection_name=coll_name)
+        context_for_judge = await get_context_from_qdrant(row['question'], collection_name=child_coll)
 
         is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
         assert is_relevant, f"❌ Judge failed relevance for: {row['question']}"
