@@ -142,10 +142,9 @@ async def test_batch_rag_evaluation():
                 answers.append(res.get("answer", str(res)) if isinstance(res, dict) else str(res))
         return answers
 
-    # 3. Wrap for Giskard
+    os.environ["GROQ_API_KEY"] = os.getenv("GR_TOKEN", "")
     ollama_llm = LiteLLMClient(
-    model="openai/gpt-oss-safeguard-20b",
-    api_key=os.getenv("GR_TOKEN")
+    model="groq/gpt-oss-safeguard-20b"
 )
     giskard_model = giskard.Model(
         model=model_predict,
