@@ -107,7 +107,7 @@ async def test_batch_rag_evaluation():
     child_coll = "the_batch_mini"
     parent_coll = "the_batch_parents_mini"
 
-    await recreate_qdrant(qdrant_client, child_coll, parent_coll)
+    await recreate_qdrant(qdrant_client, child_coll, parent_coll,child_json,parent_json)
 
 
 
