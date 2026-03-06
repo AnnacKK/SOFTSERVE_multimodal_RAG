@@ -142,24 +142,23 @@ async def test_batch_rag_evaluation():
                 answers.append(res.get("answer", str(res)) if isinstance(res, dict) else str(res))
         return answers
 
-    os.environ["GROQ_API_KEY"] = os.getenv("GR_TOKEN", "")
-    ollama_llm = LiteLLMClient(
-    model="groq/openai/gpt-oss-safeguard-20b"
-)
+    os.environ["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY", "")
+#     llm = LiteLLMClient(
+#     model="groq/openai/gpt-oss-safeguard-20b"
+# )
+    giskard.llm.set_llm_model("gemini/gemini-2.5-flash")
     giskard_model = giskard.Model(
         model=model_predict,
         model_type="text_generation",
         name="RAG_Batch_Evaluator",
         description="A RAG engine that retrieves context from Qdrant and generates answers about AI research, business, culture news.",
-        feature_names=["question", "category"],
-        llm_client=ollama_llm
+        feature_names=["question", "category"]
     )
 
     giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample")
 
 
-    scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset)
-    scan_results.to_html("giskard_report.html")
+    scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination", "faithfulness"])
 
 
     for i, row in test_df.iterrows():
