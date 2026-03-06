@@ -133,7 +133,10 @@ async def test_batch_rag_evaluation():
         for q in df["question"]:
 
             res = run_async(rag_engine.run_hybrid_rag(q))
-            answers.append(res.get("answer", str(res)) if isinstance(res, dict) else str(res))
+            if res is None:
+                answers.append("No answer generated")
+            else:
+                answers.append(res.get("answer", str(res)) if isinstance(res, dict) else str(res))
         return answers
 
     # 3. Wrap for Giskard
