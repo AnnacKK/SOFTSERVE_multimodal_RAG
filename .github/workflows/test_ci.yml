@@ -56,8 +56,9 @@ jobs:
       - name: Install Dependencies
         run: |
             python -m pip install --upgrade pip
+            pip install --upgrade "giskard[llm]" litellm evaluate groq
+            pip install -r requirements.txt pytest pytest-asyncio
             
-            pip install -r requirements.txt pytest pytest-asyncio "giskard[llm]" litellm evaluate
 
       - name: Install & Background Ollama
         run: |
