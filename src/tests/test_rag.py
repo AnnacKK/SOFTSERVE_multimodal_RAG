@@ -144,7 +144,7 @@ async def test_batch_rag_evaluation():
 
     os.environ["GROQ_API_KEY"] = os.getenv("GR_TOKEN", "")
     ollama_llm = LiteLLMClient(
-    model="groq/gpt-oss-safeguard-20b"
+    model="groq/openai/gpt-oss-safeguard-20b"
 )
     giskard_model = giskard.Model(
         model=model_predict,
