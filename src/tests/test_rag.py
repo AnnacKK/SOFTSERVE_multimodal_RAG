@@ -103,6 +103,8 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
 
 @pytest.mark.asyncio
 async def test_batch_rag_evaluation():
+    child_json = "src/tests/data/test_child.json"
+    parent_json = "src/tests/data/test_parents.json"
 
     child_coll = "the_batch_mini"
     parent_coll = "the_batch_parents_mini"
