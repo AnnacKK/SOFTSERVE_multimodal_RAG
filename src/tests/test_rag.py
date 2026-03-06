@@ -10,7 +10,7 @@ import json
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
-async def get_context_from_qdrant(question: str, collection_name_child: str = "the_batch_mini"):
+async def get_context_from_qdrant(question: str, collection_name_child: str):
     """Fetch the top relevant text chunk for the judge to use"""
 
     search_result = await qdrant_client.query(
@@ -117,7 +117,7 @@ async def test_batch_rag_evaluation():
 
 
     rag_engine = MultimodalRAG()
-    rag_engine.collection_name = child_coll
+    rag_engine.CHILD_COLL = child_coll
     rag_engine.PARENT_COLL = parent_coll
     assert rag_engine.groq_key is not None, "GR_TOKEN environment variable is missing!"
 
@@ -157,7 +157,7 @@ async def test_batch_rag_evaluation():
         res = await rag_engine.run_hybrid_rag(row['question'])
         actual_answer = res.get("answer", str(res))
 
-        context_for_judge = await get_context_from_qdrant(row['question'], collection_name=child_coll)
+        context_for_judge = await get_context_from_qdrant(row['question'], collection_name_child=child_coll)
 
         is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
         assert is_relevant, f"❌ Judge failed relevance for: {row['question']}"
