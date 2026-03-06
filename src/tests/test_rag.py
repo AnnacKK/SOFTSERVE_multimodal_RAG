@@ -141,17 +141,20 @@ async def test_batch_rag_evaluation():
                 answers.append(res.get("answer", str(res)) if isinstance(res, dict) else str(res))
         return answers
 
-    os.environ["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY", "")
-#     llm = LiteLLMClient(
-#     model="groq/openai/gpt-oss-safeguard-20b"
-# )
+    gemini_token = os.getenv("GEMINI_API_KEY")
+    if gemini_token:
+        os.environ["GEMINI_API_KEY"] = gemini_token
+        os.environ["GOOGLE_API_KEY"] = gemini_token
+
+    llm = LiteLLMClient(model="gemini/gemini-2.5-flash")
     giskard.llm.set_llm_model("gemini/gemini-2.5-flash")
     giskard_model = giskard.Model(
         model=model_predict,
         model_type="text_generation",
         name="RAG_Batch_Evaluator",
         description="A RAG engine that retrieves context from Qdrant and generates answers about AI research, business, culture news.",
-        feature_names=["question", "category"]
+        feature_names=["question", "category"],
+        llm_client=llm
     )
 
     giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample")
