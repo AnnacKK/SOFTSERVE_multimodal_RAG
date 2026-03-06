@@ -158,6 +158,8 @@ async def test_batch_rag_evaluation():
     for i, row in test_df.iterrows():
         # Get actual answer from RAG
         res = await rag_engine.run_hybrid_rag(row['question'])
+        if res is None:
+            actual_answer = "Error: Engine returned None"
         actual_answer = res.get("answer", str(res))
 
         context_for_judge = await get_context_from_qdrant(row['question'], collection_name_child=child_coll)
