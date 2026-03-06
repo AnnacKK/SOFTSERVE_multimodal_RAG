@@ -7,6 +7,8 @@ from src.engine.rag_engine import MultimodalRAG
 
 from qdrant_client import AsyncQdrantClient, models
 import json
+import giskard
+from giskard.llm.client.ollama import OllamaClient
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
@@ -140,12 +142,14 @@ async def test_batch_rag_evaluation():
         return answers
 
     # 3. Wrap for Giskard
+    ollama_llm = OllamaClient(model="qwen2.5:1.5b", base_url="http://localhost:11434")
     giskard_model = giskard.Model(
         model=model_predict,
         model_type="text_generation",
         name="RAG_Batch_Evaluator",
         description="A RAG engine that retrieves context from Qdrant and generates answers about AI research, business, culture news.",
-        feature_names=["question", "category"]
+        feature_names=["question", "category"],
+        llm_client=ollama_llm
     )
 
     giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample")
