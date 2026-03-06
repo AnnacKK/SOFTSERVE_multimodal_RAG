@@ -9,7 +9,6 @@ import os
 from qdrant_client import AsyncQdrantClient, models
 import json
 
-from giskard.llm.client.litellm import LiteLLMClient
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
