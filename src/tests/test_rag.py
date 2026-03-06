@@ -8,7 +8,6 @@ import os
 
 from qdrant_client import AsyncQdrantClient, models
 import json
-from giskard.llm.client.ollama import OllamaClient
 from giskard.llm.client.litellm import LiteLLMClient
 
 
