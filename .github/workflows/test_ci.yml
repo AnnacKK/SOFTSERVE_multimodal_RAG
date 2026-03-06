@@ -60,7 +60,7 @@ jobs:
         if: success()
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "🤖 chore: automated ruff quality fixes"
+          commit_message: "🤖 push succesfull"
 
       - name: Upload Giskard Report
         if: always()
