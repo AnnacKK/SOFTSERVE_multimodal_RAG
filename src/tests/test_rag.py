@@ -7,7 +7,6 @@ from src.engine.rag_engine import MultimodalRAG
 
 from qdrant_client import AsyncQdrantClient, models
 import json
-import os
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
@@ -105,8 +104,6 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
 @pytest.mark.asyncio
 async def test_batch_rag_evaluation():
 
-    child_json = "src/tests/data/test_child.json"
-    parent_json = "src/tests/data/test_parents.json"
     child_coll = "the_batch_mini"
     parent_coll = "the_batch_parents_mini"
 
