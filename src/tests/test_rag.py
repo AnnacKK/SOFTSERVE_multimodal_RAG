@@ -158,7 +158,6 @@ async def test_batch_rag_evaluation():
         target="ground_truth",
         description="A RAG engine that retrieves context from Qdrant and generates answers about AI research, business, culture news.",
         feature_names=["question", "category"]
-        # llm_client=llm
     )
 
     giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample")
