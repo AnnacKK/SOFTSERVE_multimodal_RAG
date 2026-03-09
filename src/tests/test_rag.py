@@ -128,6 +128,7 @@ async def test_batch_rag_evaluation():
         {"question": "What is the latest in transformer world models?", "category": "ML Research"}
     ]
     test_df = pd.DataFrame(test_samples)
+    test_df["ground_truth"] = "N/A"
 
     def model_predict(df: pd.DataFrame):
         answers = []
@@ -154,6 +155,7 @@ async def test_batch_rag_evaluation():
         model=model_predict,
         model_type="text_generation",
         name="RAG_Batch_Evaluator",
+        target="ground_truth",
         description="A RAG engine that retrieves context from Qdrant and generates answers about AI research, business, culture news.",
         feature_names=["question", "category"]
         # llm_client=llm
