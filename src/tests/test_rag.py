@@ -17,6 +17,7 @@ async def get_context_from_qdrant(question: str, collection_name_child: str):
     search_result = await qdrant_client.query(
         collection_name=collection_name_child,
         query_text=question,
+        using="text",
         limit=5
     )
 
@@ -167,7 +168,7 @@ async def test_batch_rag_evaluation():
 
     scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination", "faithfulness"])
 
-
+    print("-----------STARTING SELF JUDGE---------------")
     for i, row in test_df.iterrows():
         # Get actual answer from RAG
         res = await rag_engine.run_hybrid_rag(row['question'])
