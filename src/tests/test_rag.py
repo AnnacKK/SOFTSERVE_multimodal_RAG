@@ -120,6 +120,9 @@ async def test_batch_rag_evaluation():
     rag_engine = MultimodalRAG()
     rag_engine.CHILD_COLL = child_coll
     rag_engine.PARENT_COLL = parent_coll
+    if not rag_engine.groq_key:
+        rag_engine.groq_key = os.getenv("GR_TOKEN")
+
     assert rag_engine.groq_key is not None, "GR_TOKEN environment variable is missing!"
 
 
