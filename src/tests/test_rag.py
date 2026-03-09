@@ -158,12 +158,11 @@ async def test_batch_rag_evaluation():
         model=model_predict,
         model_type="text_generation",
         name="RAG_Batch_Evaluator",
-        target="ground_truth",
         description="A RAG engine that retrieves context from Qdrant and generates answers about AI research, business, culture news.",
         feature_names=["question", "category"]
     )
 
-    giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample")
+    giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample", target="ground_truth")
 
 
     scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination", "faithfulness"])
@@ -174,7 +173,7 @@ async def test_batch_rag_evaluation():
         res = await rag_engine.run_hybrid_rag(row['question'])
         if res is None:
             actual_answer = "Error: Engine returned None"
-        actual_answer = res.get("answer", str(res))
+        else: actual_answer = res.get("answer", str(res))
 
         context_for_judge = await get_context_from_qdrant(row['question'], collection_name_child=child_coll)
 
