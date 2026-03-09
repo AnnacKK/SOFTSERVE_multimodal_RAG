@@ -76,8 +76,24 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
         vectors_config={"none": models.VectorParams(size=1, distance=models.Distance.COSINE)}
     )
 
-    # Populate Parents
-    parent_points = [models.PointStruct(**p) for p in parent_data]
+    parent_points = []
+    for p in parent_data:
+        # Handle the case where the JSON might be flat or nested
+        # We ensure the payload has the exact keys your RagEngine uses
+        payload_data = p.get("payload", p)
+
+        point = models.PointStruct(
+            id=p["id"],
+            vector={"none": [0.0]},
+            payload={
+                "full_text": payload_data.get("full_text", ""),
+                "image_b64": payload_data.get("image_b64", ""),
+                "headline": payload_data.get("headline", "No Headline"),
+                "url": payload_data.get("url", ""),
+                "type": payload_data.get("type", "article")
+            }
+        )
+        parent_points.append(point)
     await client.upsert(collection_name=parent_coll, points=parent_points)
 
     # --- RECREATE CHILD COLLECTION (Vector Search Target) ---
@@ -169,7 +185,7 @@ async def test_batch_rag_evaluation():
 
     print("-----------STARTING SELF JUDGE---------------")
     for i, row in test_df.iterrows():
-        # Get actual answer from RAG
+
         res = await rag_engine.run_hybrid_rag(row['question'])
         if res is None:
             actual_answer = "Error: Engine returned None"
