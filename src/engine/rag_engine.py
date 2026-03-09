@@ -302,7 +302,7 @@ class MultimodalRAG:
         query_str,
         bypass_cache: bool = False,
         category=None,
-        mode="Hybrid",
+        mode="Hybrid"
     ):
         if not bypass_cache:
             cached = await self.get_semantic_cache(query_str)
@@ -361,7 +361,7 @@ class MultimodalRAG:
                 elif mode == "Text":
                     results = await self.client.query_points(
                         collection_name=self.CHILD_COLL,
-                        query=q,
+                        query=t_query,
                         using="text",
                         query_filter=query_filter,
                         limit=config.RERANKER_K,

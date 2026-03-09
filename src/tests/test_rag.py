@@ -17,7 +17,6 @@ async def get_context_from_qdrant(question: str, collection_name_child: str):
     search_result = await qdrant_client.query(
         collection_name=collection_name_child,
         query_text=question,
-        using="text",
         limit=5
     )
 
@@ -71,10 +70,10 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
     if await client.collection_exists(parent_coll):
         await client.delete_collection(parent_coll)
 
-    # Parents are retrieved by ID, so we use an empty vectors_config
+
     await client.create_collection(
         collection_name=parent_coll,
-        vectors_config={}
+        vectors_config={"none": models.VectorParams(size=1, distance=models.Distance.COSINE)}
     )
 
     # Populate Parents
