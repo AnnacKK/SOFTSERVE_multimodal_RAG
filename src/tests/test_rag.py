@@ -146,8 +146,8 @@ async def test_batch_rag_evaluation():
         os.environ["GEMINI_API_KEY"] = gemini_token
         os.environ["GOOGLE_API_KEY"] = gemini_token
 
-    llm = LiteLLMClient(model="gemini/gemini-2.5-flash")
-    giskard.llm.set_llm_model("gemini/gemini-2.5-flash")
+    llm = LiteLLMClient(model="gemini/gemini-1.5-pro")
+    giskard.llm.set_llm_model("gemini/gemini-1.5-pro")
     giskard_model = giskard.Model(
         model=model_predict,
         model_type="text_generation",
