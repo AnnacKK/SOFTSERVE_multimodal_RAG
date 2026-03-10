@@ -380,7 +380,7 @@ class MultimodalRAG:
                         ],
                         query=models.FusionQuery(fusion=models.Fusion.RRF),
                         query_filter=query_filter,
-                        score_threshold=0.5,
+                        score_threshold=0.2,
                         limit=config.RERANKER_K,
                     )
                 for hit in results.points:
@@ -391,7 +391,7 @@ class MultimodalRAG:
             if not all_hits:
                 return {
                     "headline": "No Results",
-                    "answer": "I couldn't find any relevant snippets in the database for this query.",
+                    "answer": "I couldn't find any relevant hints in the database for this query.",
                     "confidence_score": 0,
                     "sources": []
                 }

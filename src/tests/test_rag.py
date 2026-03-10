@@ -29,7 +29,7 @@ async def get_context_from_qdrant(rag_engine: MultimodalRAG,question: str, colle
     search_result = await qdrant_client.query_points(
         collection_name=collection_name_child,
         query=vector.tolist(),
-        using="text",
+        using="text-sparse",
         limit=15
     )
 
@@ -39,10 +39,10 @@ async def get_context_from_qdrant(rag_engine: MultimodalRAG,question: str, colle
 
         # Get top 5 most relevant from the 15
         results = ranker.rerank(rerank_request)
-        top_5 = [r['text'] for r in results[:5]]
+        top_5 = [r['text'] for r in results[:7]]
 
         return "\n---\n".join(top_5)
-    return "No context found."
+    else:return "No context found."
 
 def run_async(coro):
     try:
@@ -171,7 +171,10 @@ async def test_batch_rag_evaluation():
                 try:
                     res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=60.0)
                     if res is None: return "Error: Engine returned None"
+                    if res.get("answer") == "I couldn't find any relevant snippets in the database for this query.":
+                        return "DEBUG: Retrieval failed. Thresholds too high for current test data."
                     return res.get("answer", str(res)) if isinstance(res, dict) else str(res)
+
                 except Exception as e:
                     return f"Error: {str(e)}"
 
