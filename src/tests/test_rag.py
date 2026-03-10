@@ -197,9 +197,6 @@ async def test_batch_rag_evaluation():
     except Exception as e:
         print(f"❌ Failed to save Giskard report: {e}")
 
-        # NOW RUN ASSERTIONS
-        # If this fails, the GitHub Action will still find the .html file created above
-    assert not scan_results.has_issues, "❌ Giskard found vulnerabilities in the RAG pipeline"
 
 
     print("-----------STARTING SELF JUDGE---------------")
@@ -221,12 +218,17 @@ async def test_batch_rag_evaluation():
             "answer": actual_answer,
             "judge_decision": "PASS" if is_relevant else "FAIL"
         })
-        assert is_relevant, f"❌ Judge failed relevance for: {row['question']}"
 
     judge_report_name = f"judge_results_{timestamp}.json"
     with open(judge_report_name, "w", encoding="utf-8") as f:
         json.dump(judge_results, f, indent=4)
 
     print(f"✅ Judge results saved to {judge_report_name}")
+
+    assert not scan_results.has_issues, f"❌ Giskard found {len(scan_results.issues)} issues. Check {report_name}"
+    judge_fails = [r for r in judge_results if r["judge_decision"] == "FAIL"]
+    assert not judge_fails, f"❌ Judge failed {len(judge_fails)} cases. Check {judge_report_name}"
+
+
 
 
