@@ -29,7 +29,7 @@ async def get_context_from_qdrant(rag_engine: MultimodalRAG,question: str, colle
     search_result = await qdrant_client.query_points(
         collection_name=collection_name_child,
         query=vector.tolist(),
-        using="text-sparse",
+        using="text",
         limit=15
     )
 
