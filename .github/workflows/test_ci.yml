@@ -58,6 +58,7 @@ jobs:
             python -m pip install --upgrade pip
             pip install --upgrade "giskard[llm]" litellm evaluate google-generativeai
             pip install -r requirements.txt pytest pytest-asyncio
+            pip install flashrank
             
 
       - name: Install & Background Ollama

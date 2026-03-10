@@ -8,10 +8,14 @@ import os
 import datetime
 from qdrant_client import AsyncQdrantClient, models
 import json
+from flashrank import Ranker, RerankRequest
+
+
+ranker = Ranker()
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
-sem = asyncio.Semaphore(3)
+
 
 async def get_context_from_qdrant(rag_engine: MultimodalRAG,question: str, collection_name_child: str):
     """Fetch the top relevant text chunk for the judge to use"""
@@ -30,11 +34,14 @@ async def get_context_from_qdrant(rag_engine: MultimodalRAG,question: str, colle
     )
 
     if search_result:
+        passages = [{"id": i, "text": res.payload["chunk_text"]} for i, res in enumerate(search_result.points)]
+        rerank_request = RerankRequest(query=question, passages=passages)
 
-        merged_text = "\n---\n".join([
-            res.payload.get("chunk_text", "") for res in search_result.points
-        ])
-        return merged_text
+        # Get top 5 most relevant from the 15
+        results = ranker.rerank(rerank_request)
+        top_5 = [r['text'] for r in results[:5]]
+
+        return "\n---\n".join(top_5)
     return "No context found."
 
 def run_async(coro):
@@ -129,6 +136,9 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
 
 @pytest.mark.asyncio
 async def test_batch_rag_evaluation():
+    test_loop = asyncio.get_running_loop()
+    test_sem = asyncio.Semaphore(3)
+
     child_json = "src/tests/data/test_child.json"
     parent_json = "src/tests/data/test_parents.json"
 
@@ -157,7 +167,7 @@ async def test_batch_rag_evaluation():
 
     def model_predict(df: pd.DataFrame):
         async def wrapped_predict(q):
-            async with sem:
+            async with test_sem:
                 try:
                     res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=60.0)
                     if res is None: return "Error: Engine returned None"
@@ -168,8 +178,8 @@ async def test_batch_rag_evaluation():
         async def run_batch():
             return await asyncio.gather(*[wrapped_predict(q) for q in df["question"]])
 
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(run_batch())
+        future = asyncio.run_coroutine_threadsafe(run_batch(), test_loop)
+        return future.result()
 
     gemini_token = os.getenv("GEMINI_API_KEY")
     if gemini_token:
@@ -206,7 +216,7 @@ async def test_batch_rag_evaluation():
     print("-----------STARTING SELF JUDGE---------------")
 
     async def run_judge(row):
-        async with sem:
+        async with test_sem:
             res = await rag_engine.run_hybrid_rag(row['question'])
             if res is None:
                 actual_answer = "Error: Engine returned None"
@@ -226,7 +236,9 @@ async def test_batch_rag_evaluation():
                 "judge_decision": "PASS" if is_relevant else "FAIL"
             }
 
-    judge_results = await asyncio.gather(*[run_judge(row) for _, row in test_df.iterrows()])
+
+    judge_tasks = [run_judge(row) for _, row in test_df.iterrows()]
+    judge_results = await asyncio.gather(*judge_tasks)
 
     judge_report_name = f"judge_results_{timestamp}.json"
     with open(judge_report_name, "w", encoding="utf-8") as f:
@@ -251,6 +263,7 @@ async def test_batch_rag_evaluation():
     assert not scan_results.has_issues, f"❌ Giskard found {len(scan_results.issues)} issues. Check {report_name}"
     judge_fails = [r for r in judge_results if r["judge_decision"] == "FAIL"]
     assert not judge_fails, f"❌ Judge failed {len(judge_fails)} cases. Check {judge_report_name}"
+    await qdrant_client.close()
 
 
 
