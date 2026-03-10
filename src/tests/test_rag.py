@@ -146,8 +146,14 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
         }
     )
 
-    # Populate Children
-    child_points = [models.PointStruct(**p) for p in child_data]
+    child_points = []
+    for p in child_data:
+        point = models.PointStruct(
+            id=p["id"],
+            vector=p["vector"],
+            payload=p["payload"]
+        )
+        child_points.append(point)
     await client.upsert(collection_name=child_coll, points=child_points)
 
     print(f"✅ Success: Recreated {parent_coll} ({len(parent_points)} pts) and {child_coll} ({len(child_points)} pts)")
@@ -167,6 +173,8 @@ async def test_batch_rag_evaluation():
     await recreate_qdrant(qdrant_client, child_coll, parent_coll,child_json,parent_json)
 
     rag_engine = MultimodalRAG()
+    rag_engine.RERANK_LIMIT = 0.1
+    rag_engine.THRESHOLD = 0.1
     rag_engine.CHILD_COLL = child_coll
     rag_engine.PARENT_COLL = parent_coll
     if not rag_engine.groq_key:

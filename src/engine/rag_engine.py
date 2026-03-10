@@ -485,6 +485,7 @@ class MultimodalRAG:
                     "sources": []
                 }
 
+
             combined_context = "\n\n---\n\n".join(
                 [doc.page_content for doc in seen_parents_text_content],
             )
