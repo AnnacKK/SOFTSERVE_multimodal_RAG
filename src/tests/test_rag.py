@@ -142,7 +142,7 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
             "image": models.VectorParams(size=512, distance=models.Distance.COSINE)
         },
         sparse_vectors_config={
-            "text-sparse": models.SparseVectorParams(index=models.SparseIndexParams(full_scan=True))
+            "text-sparse": models.SparseVectorParams(index=models.SparseIndexParams())
         }
     )
 
