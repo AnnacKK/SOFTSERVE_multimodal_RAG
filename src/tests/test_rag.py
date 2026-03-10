@@ -11,6 +11,8 @@ import json
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
+sem = asyncio.Semaphore(3)
+
 async def get_context_from_qdrant(rag_engine: MultimodalRAG,question: str, collection_name_child: str):
     """Fetch the top relevant text chunk for the judge to use"""
 
@@ -24,7 +26,7 @@ async def get_context_from_qdrant(rag_engine: MultimodalRAG,question: str, colle
         collection_name=collection_name_child,
         query=vector.tolist(),
         using="text",
-        limit=5
+        limit=15
     )
 
     if search_result:
@@ -135,11 +137,6 @@ async def test_batch_rag_evaluation():
 
     await recreate_qdrant(qdrant_client, child_coll, parent_coll,child_json,parent_json)
 
-
-
-
-
-
     rag_engine = MultimodalRAG()
     rag_engine.CHILD_COLL = child_coll
     rag_engine.PARENT_COLL = parent_coll
@@ -156,16 +153,23 @@ async def test_batch_rag_evaluation():
     test_df = pd.DataFrame(test_samples)
     test_df["ground_truth"] = "N/A"
 
-    def model_predict(df: pd.DataFrame):
-        answers = []
-        for q in df["question"]:
 
-            res = run_async(rag_engine.run_hybrid_rag(q))
-            if res is None:
-                answers.append("No answer generated")
-            else:
-                answers.append(res.get("answer", str(res)) if isinstance(res, dict) else str(res))
-        return answers
+
+    def model_predict(df: pd.DataFrame):
+        async def wrapped_predict(q):
+            async with sem:
+                try:
+                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=60.0)
+                    if res is None: return "Error: Engine returned None"
+                    return res.get("answer", str(res)) if isinstance(res, dict) else str(res)
+                except Exception as e:
+                    return f"Error: {str(e)}"
+
+        async def run_batch():
+            return await asyncio.gather(*[wrapped_predict(q) for q in df["question"]])
+
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(run_batch())
 
     gemini_token = os.getenv("GEMINI_API_KEY")
     if gemini_token:
@@ -200,30 +204,49 @@ async def test_batch_rag_evaluation():
 
 
     print("-----------STARTING SELF JUDGE---------------")
-    judge_results = []
-    for i, row in test_df.iterrows():
 
-        res = await rag_engine.run_hybrid_rag(row['question'])
-        if res is None:
-            actual_answer = "Error: Engine returned None"
-        else: actual_answer = res.get("answer", str(res))
+    async def run_judge(row):
+        async with sem:
+            res = await rag_engine.run_hybrid_rag(row['question'])
+            if res is None:
+                actual_answer = "Error: Engine returned None"
+            else:
+                actual_answer = res.get("answer", str(res))
 
-        context_for_judge = await get_context_from_qdrant(rag_engine,row['question'], collection_name_child=child_coll)
+            context_for_judge = await get_context_from_qdrant(rag_engine, row['question'],
+                                                              collection_name_child=child_coll)
 
-        is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
-        judge_results.append({
-            "timestamp": datetime.datetime.now().isoformat(),
-            "question": row['question'],
-            "context_snippet": context_for_judge[:200] + "...",  # Truncate for readability
-            "answer": actual_answer,
-            "judge_decision": "PASS" if is_relevant else "FAIL"
-        })
+            is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
+            return {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "question": row['question'],
+                "context_len": len(context_for_judge),
+                "context_snippet": context_for_judge[:200] + "...",  # Truncate for readability
+                "answer": actual_answer,
+                "judge_decision": "PASS" if is_relevant else "FAIL"
+            }
+
+    judge_results = await asyncio.gather(*[run_judge(row) for _, row in test_df.iterrows()])
 
     judge_report_name = f"judge_results_{timestamp}.json"
     with open(judge_report_name, "w", encoding="utf-8") as f:
         json.dump(judge_results, f, indent=4)
 
     print(f"✅ Judge results saved to {judge_report_name}")
+
+    if os.getenv("GITHUB_STEP_SUMMARY"):
+        with open(os.getenv("GITHUB_STEP_SUMMARY"), "a") as summary:
+            summary.write("### ⚖️ LLM Judge Results\n")
+            summary.write("| Question | Decision | Answer Preview |\n")
+            summary.write("| :--- | :--- | :--- |\n")
+            for r in judge_results:
+                icon = "✅" if r["judge_decision"] == "PASS" else "❌"
+                summary.write(f"| {r['question']} | {icon} {r['judge_decision']} | {r['answer'][:50]}... |\n")
+
+            summary.write(f"\n### 🛡️ Giskard Scan\n")
+            summary.write(f"- Issues Found: {len(scan_results.issues)}\n")
+            summary.write(
+                f"- [View Full HTML Report]({os.getenv('GITHUB_SERVER_URL')}/{os.getenv('GITHUB_REPOSITORY')}/actions/runs/{os.getenv('GITHUB_RUN_ID')})\n")
 
     assert not scan_results.has_issues, f"❌ Giskard found {len(scan_results.issues)} issues. Check {report_name}"
     judge_fails = [r for r in judge_results if r["judge_decision"] == "FAIL"]

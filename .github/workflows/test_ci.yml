@@ -92,6 +92,13 @@ jobs:
         with:
           name: judge-logs
           path: judge_results_*.json
+      - name: Display Judge Results
+        if: always()
+        run: |
+            echo "### ⚖️ Judge JSON Output" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+            cat judge_results_*.json >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
   # Job 3: Dockerize and Deploy
   build-and-push:

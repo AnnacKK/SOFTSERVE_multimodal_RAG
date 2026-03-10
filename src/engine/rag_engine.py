@@ -462,8 +462,8 @@ class MultimodalRAG:
                             if "logo" not in desc.lower():
                                 images_and_descriptions.append(
                                     {
-                                        "image": pure_string,  # 🟢 Clean Base64 string
-                                        "description": desc,  # 🟢 Technical description
+                                        "image": pure_string,
+                                        "description": desc,
                                     },
                                 )
 
