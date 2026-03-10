@@ -17,6 +17,7 @@ async def get_context_from_qdrant(question: str, collection_name_child: str):
     search_result = await qdrant_client.query(
         collection_name=collection_name_child,
         query_text=question,
+        using="text",
         limit=5
     )
 
