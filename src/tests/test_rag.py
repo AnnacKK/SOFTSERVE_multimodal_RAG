@@ -5,18 +5,24 @@ import asyncio
 from ollama import Client
 from src.engine.rag_engine import MultimodalRAG
 import os
-
+import datetime
 from qdrant_client import AsyncQdrantClient, models
 import json
 
 
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
-async def get_context_from_qdrant(question: str, collection_name_child: str):
+async def get_context_from_qdrant(rag_engine: MultimodalRAG,question: str, collection_name_child: str):
     """Fetch the top relevant text chunk for the judge to use"""
+
+    vector = await asyncio.to_thread(
+        rag_engine.text_model.encode,
+        question,
+        normalize_embeddings=True
+    )
 
     search_result = await qdrant_client.query_points(
         collection_name=collection_name_child,
-        query=question,
+        query=vector.tolist(),
         using="text",
         limit=5
     )
@@ -24,7 +30,7 @@ async def get_context_from_qdrant(question: str, collection_name_child: str):
     if search_result:
 
         merged_text = "\n---\n".join([
-            res.payload.get("chunk_text", "") for res in search_result
+            res.payload.get("chunk_text", "") for res in search_result.points
         ])
         return merged_text
     return "No context found."
@@ -183,18 +189,30 @@ async def test_batch_rag_evaluation():
 
 
     scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination", "faithfulness"])
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_name = f"giskard_report_{timestamp}.html"
+    try:
+        scan_results.to_html(report_name)
+        print(f"✅ Giskard report successfully saved to {report_name}")
+    except Exception as e:
+        print(f"❌ Failed to save Giskard report: {e}")
+
+        # NOW RUN ASSERTIONS
+        # If this fails, the GitHub Action will still find the .html file created above
+    assert not scan_results.has_issues(severity="high"), "❌ Giskard found high-severity vulnerabilities"
+
 
     print("-----------STARTING SELF JUDGE---------------")
-    # for i, row in test_df.iterrows():
-    #
-    #     res = await rag_engine.run_hybrid_rag(row['question'])
-    #     if res is None:
-    #         actual_answer = "Error: Engine returned None"
-    #     else: actual_answer = res.get("answer", str(res))
-    #
-    #     context_for_judge = await get_context_from_qdrant(row['question'], collection_name_child=child_coll)
-    #
-    #     is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
-    #     assert is_relevant, f"❌ Judge failed relevance for: {row['question']}"
-    #
-    # assert not scan_results.has_issues(severity="high"), "❌ Giskard found high-severity vulnerabilities"
+    for i, row in test_df.iterrows():
+
+        res = await rag_engine.run_hybrid_rag(row['question'])
+        if res is None:
+            actual_answer = "Error: Engine returned None"
+        else: actual_answer = res.get("answer", str(res))
+
+        context_for_judge = await get_context_from_qdrant(rag_engine,row['question'], collection_name_child=child_coll)
+
+        is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
+        assert is_relevant, f"❌ Judge failed relevance for: {row['question']}"
+
+    assert not scan_results.has_issues(severity="high"), "❌ Giskard found high-severity vulnerabilities"
