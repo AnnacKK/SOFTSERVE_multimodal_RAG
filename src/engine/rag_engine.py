@@ -40,7 +40,7 @@ qdrant_port = 6333
 
 class MultimodalRAG:
     def __init__(self) -> None:
-        self.client = AsyncQdrantClient(url="http://localhost:6333", timeout=60)
+        self.client = AsyncQdrantClient(url=config.QDRANT_URL, timeout=60)
         self.text_model = SentenceTransformer(config.TEXT_MODEL_NAME, device="cpu")
         self.vision_model = SentenceTransformer(
             config.IMAGE_MODEL_NAME,
