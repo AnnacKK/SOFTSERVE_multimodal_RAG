@@ -17,32 +17,51 @@ ranker = Ranker()
 qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
 
 
-async def get_context_from_qdrant(rag_engine: MultimodalRAG,question: str, collection_name_child: str):
-    """Fetch the top relevant text chunk for the judge to use"""
+async def get_context_from_qdrant(rag_engine: MultimodalRAG, question: str, collection_name_child: str):
+    """Fetch the top relevant text chunk using the same Hybrid logic as the RAG engine"""
 
-    vector = await asyncio.to_thread(
-        rag_engine.text_model.encode,
-        question,
-        normalize_embeddings=True
+    # 1. Prepare all 3 vectors (Dense, Vision, Sparse)
+    t_vec = await asyncio.to_thread(rag_engine.text_model.encode, question, normalize_embeddings=True)
+    i_vec = await asyncio.to_thread(rag_engine.vision_model.encode, question, normalize_embeddings=True)
+
+    sparse_res_list = await asyncio.to_thread(list, rag_engine.sparse_model.embed([question]))
+    sparse_res = sparse_res_list[0]
+    sparse_vec = models.SparseVector(
+        indices=sparse_res.indices.tolist(),
+        values=sparse_res.values.tolist(),
     )
 
+    # 2. Perform the Hybrid Search (MATCHING YOUR RAG CODE)
+    # Note: Remove score_threshold here because RRF scores are rank-based decimals
     search_result = await qdrant_client.query_points(
         collection_name=collection_name_child,
-        query=vector.tolist(),
-        using="text",
+        prefetch=[
+            models.Prefetch(query=t_vec.tolist(), using="text", limit=15),
+            models.Prefetch(query=i_vec.tolist(), using="image", limit=15),
+            models.Prefetch(query=sparse_vec, using="text-sparse", limit=15),
+        ],
+        query=models.FusionQuery(fusion=models.Fusion.RRF),
         limit=15
     )
 
-    if search_result:
-        passages = [{"id": i, "text": res.payload["chunk_text"]} for i, res in enumerate(search_result.points)]
+    if search_result.points:
+        # Extract text from the 'chunk_text' key found in your JSON
+        passages = []
+        for i, res in enumerate(search_result.points):
+            txt = res.payload.get("chunk_text") or res.payload.get("full_text")
+            if txt:
+                passages.append({"id": i, "text": txt})
+
+        if not passages:
+            return "No text content found in retrieval results."
+
+        # 3. Rerank to find the absolute best context for the Judge
         rerank_request = RerankRequest(query=question, passages=passages)
-
-        # Get top 5 most relevant from the 15
         results = ranker.rerank(rerank_request)
-        top_5 = [r['text'] for r in results[:7]]
 
-        return "\n---\n".join(top_5)
-    else:return "No context found."
+        return "\n---\n".join([r['text'] for r in results[:5]])
+
+    return "No context found."
 
 def run_async(coro):
     try:
@@ -123,7 +142,7 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
             "image": models.VectorParams(size=512, distance=models.Distance.COSINE)
         },
         sparse_vectors_config={
-            "text-sparse": models.SparseVectorParams(index=models.SparseIndexParams())
+            "text-sparse": models.SparseVectorParams(index=models.SparseIndexParams(full_scan=True))
         }
     )
 
