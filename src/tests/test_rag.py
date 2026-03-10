@@ -182,7 +182,7 @@ async def test_batch_rag_evaluation():
     giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample", target="ground_truth")
 
 
-    await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination", "faithfulness"])
+    scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination", "faithfulness"])
 
     print("-----------STARTING SELF JUDGE---------------")
     # for i, row in test_df.iterrows():
