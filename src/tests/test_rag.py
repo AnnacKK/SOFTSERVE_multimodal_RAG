@@ -258,7 +258,7 @@ async def test_batch_rag_evaluation():
                 icon = "✅" if r["judge_decision"] == "PASS" else "❌"
                 summary.write(f"| {r['question']} | {icon} {r['judge_decision']} | {r['answer'][:50]}... |\n")
 
-            summary.write(f"\n### 🛡️ Giskard Scan\n")
+            summary.write("\n### 🛡️ Giskard Scan\n")
             summary.write(f"- Issues Found: {len(scan_results.issues)}\n")
             summary.write(
                 f"- [View Full HTML Report]({os.getenv('GITHUB_SERVER_URL')}/{os.getenv('GITHUB_REPOSITORY')}/actions/runs/{os.getenv('GITHUB_RUN_ID')})\n")
