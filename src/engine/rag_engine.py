@@ -40,7 +40,7 @@ qdrant_port = 6333
 
 class MultimodalRAG:
     def __init__(self) -> None:
-        self.client = AsyncQdrantClient(url=config.QDRANT_URL, timeout=60)
+        self.client = AsyncQdrantClient(url="http://localhost:6333", timeout=60)
         self.text_model = SentenceTransformer(config.TEXT_MODEL_NAME, device="cpu")
         self.vision_model = SentenceTransformer(
             config.IMAGE_MODEL_NAME,
@@ -389,7 +389,12 @@ class MultimodalRAG:
                         seen_ids.add(hit.id)
 
             if not all_hits:
-                return None
+                return {
+                    "headline": "No Results",
+                    "answer": "I couldn't find any relevant snippets in the database for this query.",
+                    "confidence_score": 0,
+                    "sources": []
+                }
 
             try:
                 pairs = [
@@ -470,7 +475,12 @@ class MultimodalRAG:
                         seen_parents_text_content.append(parent_doc)
 
             if not seen_parents_payloads:
-                return None
+                return {
+                    "headline": "No Results",
+                    "answer": "I couldn't find any relevant snippets in the database for this query.",
+                    "confidence_score": 0,
+                    "sources": []
+                }
 
             combined_context = "\n\n---\n\n".join(
                 [doc.page_content for doc in seen_parents_text_content],
