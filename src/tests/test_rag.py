@@ -199,10 +199,11 @@ async def test_batch_rag_evaluation():
 
         # NOW RUN ASSERTIONS
         # If this fails, the GitHub Action will still find the .html file created above
-    assert not scan_results.has_issues(severity="high"), "❌ Giskard found high-severity vulnerabilities"
+    assert not scan_results.has_issues, "❌ Giskard found vulnerabilities in the RAG pipeline"
 
 
     print("-----------STARTING SELF JUDGE---------------")
+    judge_results = []
     for i, row in test_df.iterrows():
 
         res = await rag_engine.run_hybrid_rag(row['question'])
@@ -213,6 +214,19 @@ async def test_batch_rag_evaluation():
         context_for_judge = await get_context_from_qdrant(rag_engine,row['question'], collection_name_child=child_coll)
 
         is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
+        judge_results.append({
+            "timestamp": datetime.datetime.now().isoformat(),
+            "question": row['question'],
+            "context_snippet": context_for_judge[:200] + "...",  # Truncate for readability
+            "answer": actual_answer,
+            "judge_decision": "PASS" if is_relevant else "FAIL"
+        })
         assert is_relevant, f"❌ Judge failed relevance for: {row['question']}"
 
-    assert not scan_results.has_issues(severity="high"), "❌ Giskard found high-severity vulnerabilities"
+    judge_report_name = f"judge_results_{timestamp}.json"
+    with open(judge_report_name, "w", encoding="utf-8") as f:
+        json.dump(judge_results, f, indent=4)
+
+    print(f"✅ Judge results saved to {judge_report_name}")
+
+

@@ -86,6 +86,12 @@ jobs:
         with:
           name: giskard-report
           path: giskard_report_*.html
+      - name: Upload Judge Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: judge-logs
+          path: judge_results_*.json
 
   # Job 3: Dockerize and Deploy
   build-and-push:
