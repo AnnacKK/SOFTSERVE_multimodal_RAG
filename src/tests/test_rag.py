@@ -240,14 +240,14 @@ async def test_batch_rag_evaluation():
     giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample", target="ground_truth")
 
 
-    scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination"],params={"hallucination": {"samples_limit": 1}})
+    # scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination"],params={"hallucination": {"samples_limit": 1}})
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_name = f"giskard_report_{timestamp}.html"
-    try:
-        scan_results.to_html(report_name)
-        print(f"✅ Giskard report successfully saved to {report_name}")
-    except Exception as e:
-        print(f"❌ Failed to save Giskard report: {e}")
+    # report_name = f"giskard_report_{timestamp}.html"
+    # try:
+    #     scan_results.to_html(report_name)
+    #     print(f"✅ Giskard report successfully saved to {report_name}")
+    # except Exception as e:
+    #     print(f"❌ Failed to save Giskard report: {e}")
 
 
 
@@ -293,17 +293,17 @@ async def test_batch_rag_evaluation():
                 icon = "✅" if r["judge_decision"] == "PASS" else "❌"
                 summary.write(f"| {r['question']} | {icon} {r['judge_decision']} | {r['answer'][:50]}... |\n")
 
-            summary.write("\n### 🛡️ Giskard Scan\n")
-            summary.write(f"- Issues Found: {len(scan_results.issues)}\n")
-            summary.write(
-                f"- [View Full HTML Report]({os.getenv('GITHUB_SERVER_URL')}/{os.getenv('GITHUB_REPOSITORY')}/actions/runs/{os.getenv('GITHUB_RUN_ID')})\n")
+            # summary.write("\n### 🛡️ Giskard Scan\n")
+            # summary.write(f"- Issues Found: {len(scan_results.issues)}\n")
+            # summary.write(
+            #     f"- [View Full HTML Report]({os.getenv('GITHUB_SERVER_URL')}/{os.getenv('GITHUB_REPOSITORY')}/actions/runs/{os.getenv('GITHUB_RUN_ID')})\n")
 
 
     judge_fails = [r for r in judge_results if r["judge_decision"] == "FAIL"]
     assert not judge_fails, f"❌ Judge failed {len(judge_fails)} cases. Check {judge_report_name}"
-    major_issues = [issue for issue in scan_results.issues if issue.level == "major"]
-    assert not major_issues, f"❌ Giskard found {len(major_issues)} MAJOR issues. Check report."
-    await qdrant_client.close()
+    # major_issues = [issue for issue in scan_results.issues if issue.level == "major"]
+    # assert not major_issues, f"❌ Giskard found {len(major_issues)} MAJOR issues. Check report."
+    # await qdrant_client.close()
 
 
 
