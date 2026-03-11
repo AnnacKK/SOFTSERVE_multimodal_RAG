@@ -434,7 +434,7 @@ class MultimodalRAG:
                             ids=[p_id],
                         ),
                     )
-                if len(unique_p_ids) >= 10:
+                if len(unique_p_ids) >= 6:
                     break
 
             parent_results = await asyncio.gather(*fetch_tasks)
