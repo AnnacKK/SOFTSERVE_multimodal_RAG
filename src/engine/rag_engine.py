@@ -60,7 +60,7 @@ class MultimodalRAG:
         self.PARENT_COLL = config.PARENT_COLL
         self.THRESHOLD = 0.3
         self.RERANK_LIMIT = 0.6
-        self.QDRANT_LIMIT=10
+        self.QDRANT_LIMIT=50
         self.groq_key = getattr(config, 'GR_TOKEN', None) or os.getenv("GR_TOKEN")
 
         if not self.groq_key:
@@ -480,10 +480,11 @@ class MultimodalRAG:
                                 )
 
                         seen_parents_text_content.append(parent_doc)
-            print(f"DEBUG: sorted_hits scores: {[h.score for h in sorted_hits[:3]]}")
+            print(f"DEBUG: sorted_hits scores: {[h.score for h in sorted_hits]}")
+
             if not seen_parents_payloads:
                 return {
-                    "headline": len(seen_parents_payloads),
+                    "headline": "No Relevant Context",
                     "answer": "I couldn't find any relevant snippets in the database for this query.",
                     "confidence_score": 0,
                     "sources": []
