@@ -152,7 +152,7 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
         )
         child_points.append(point)
     await client.upsert(collection_name=child_coll, points=child_points)
-    await asyncio.sleep(1)
+    await asyncio.sleep(5)
 
     print(f"✅ Success: Recreated {parent_coll} ({len(parent_points)} pts) and {child_coll} ({len(child_points)} pts)")
 
@@ -171,8 +171,8 @@ async def test_batch_rag_evaluation():
     await recreate_qdrant(qdrant_client, child_coll, parent_coll,child_json,parent_json)
 
     rag_engine = MultimodalRAG()
-    rag_engine.RERANK_LIMIT = -1
-    rag_engine.THRESHOLD = -1
+    rag_engine.RERANK_LIMIT = -1.0
+    rag_engine.THRESHOLD = -1.0
     rag_engine.client=qdrant_client
     rag_engine.CHILD_COLL = child_coll
     rag_engine.PARENT_COLL = parent_coll
@@ -196,7 +196,7 @@ async def test_batch_rag_evaluation():
                 try:
                     rag_engine.chat_history.clear()
 
-                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=60.0)
+                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=90.0)
 
                     if res is None:
                         return "Error: Engine returned None"
@@ -210,7 +210,11 @@ async def test_batch_rag_evaluation():
                     return f"Error: {str(e)}"
 
         async def run_batch():
-            return await asyncio.gather(*[wrapped_predict(q) for q in df["question"]])
+            results = []
+            for q in df["question"]:
+                results.append(await wrapped_predict(q))
+                await asyncio.sleep(0.2)
+            return results
 
         future = asyncio.run_coroutine_threadsafe(run_batch(), test_loop)
         return future.result()

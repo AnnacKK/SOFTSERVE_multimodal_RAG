@@ -60,7 +60,7 @@ class MultimodalRAG:
         self.PARENT_COLL = config.PARENT_COLL
         self.THRESHOLD = 0.3
         self.RERANK_LIMIT = 0.6
-        self.QDRANT_LIMIT=15
+        self.QDRANT_LIMIT=10
         self.groq_key = getattr(config, 'GR_TOKEN', None) or os.getenv("GR_TOKEN")
 
         if not self.groq_key:
