@@ -387,7 +387,7 @@ class MultimodalRAG:
                         ],
                         query=models.FusionQuery(fusion=models.Fusion.RRF),
                         query_filter=query_filter,
-                        score_threshold=0.2,
+                        #score_threshold=0.2,
                         limit=self.QDRANT_LIMIT,
                     )
                 for hit in results.points:

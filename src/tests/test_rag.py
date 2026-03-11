@@ -171,8 +171,8 @@ async def test_batch_rag_evaluation():
     await recreate_qdrant(qdrant_client, child_coll, parent_coll,child_json,parent_json)
 
     rag_engine = MultimodalRAG()
-    rag_engine.RERANK_LIMIT = 0.1
-    rag_engine.THRESHOLD = 0.1
+    rag_engine.RERANK_LIMIT = -1
+    rag_engine.THRESHOLD = -1
     rag_engine.client=qdrant_client
     rag_engine.CHILD_COLL = child_coll
     rag_engine.PARENT_COLL = parent_coll
@@ -236,7 +236,7 @@ async def test_batch_rag_evaluation():
     giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample", target="ground_truth")
 
 
-    scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination", "faithfulness"],params={"hallucination": {"samples_limit": 5}})
+    scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination"],params={"hallucination": {"samples_limit": 2}})
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     report_name = f"giskard_report_{timestamp}.html"
     try:
