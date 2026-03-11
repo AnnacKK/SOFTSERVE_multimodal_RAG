@@ -196,7 +196,7 @@ async def test_batch_rag_evaluation():
                 try:
                     rag_engine.chat_history.clear()
 
-                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=90.0)
+                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=60.0)
 
                     if res is None:
                         return "Error: Engine returned None"
