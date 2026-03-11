@@ -229,7 +229,7 @@ async def test_batch_rag_evaluation():
     # llm = LiteLLMClient(model="ollama/qwen2.5:1.5b")
     giskard.llm.set_llm_model("ollama/qwen2.5:1.5b", disable_structured_output=True, api_base=api_base)
 
-    giskard_model = giskard.Model(
+    giskard.Model(
         model=model_predict,
         model_type="text_generation",
         name="RAG_Batch_Evaluator",
@@ -237,7 +237,7 @@ async def test_batch_rag_evaluation():
         feature_names=["question", "category"]
     )
 
-    giskard_dataset = giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample", target="ground_truth")
+    giskard.Dataset(df=test_df, name="The_Batch_Multimodal_Sample", target="ground_truth")
 
 
     # scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination"],params={"hallucination": {"samples_limit": 1}})
