@@ -196,27 +196,21 @@ async def test_batch_rag_evaluation():
                 try:
                     rag_engine.chat_history.clear()
 
-                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=90.0)
+                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=60.0)
 
                     if res is None:
                         return "Error: Engine returned None"
 
                     answer = res.get("answer", "")
                     if "I couldn't find any relevant snippets" in answer:
-                        return "DEBUG: Retrieval failed. Thresholds might be too high."
-
+                        return "I am sorry, but I do not have enough information to answer that question."
                     return answer
 
                 except Exception as e:
                     return f"Error: {str(e)}"
 
         async def run_batch():
-
-            results = []
-            for q in df["question"]:
-                results.append(await wrapped_predict(q))
-                await asyncio.sleep(0.5)
-            return results
+            return await asyncio.gather(*[wrapped_predict(q) for q in df["question"]])
 
         future = asyncio.run_coroutine_threadsafe(run_batch(), test_loop)
         return future.result()

@@ -60,6 +60,7 @@ class MultimodalRAG:
         self.PARENT_COLL = config.PARENT_COLL
         self.THRESHOLD = 0.3
         self.RERANK_LIMIT = 0.6
+        self.QDRANT_LIMIT=15
         self.groq_key = getattr(config, 'GR_TOKEN', None) or os.getenv("GR_TOKEN")
 
         if not self.groq_key:
@@ -362,7 +363,7 @@ class MultimodalRAG:
                         query=i_query,
                         using="image",
                         query_filter=query_filter,
-                        limit=15,
+                        limit=self.QDRANT_LIMIT,
                     )
                 elif mode == "Text":
                     results = await self.client.query_points(
@@ -370,24 +371,24 @@ class MultimodalRAG:
                         query=t_query,
                         using="text",
                         query_filter=query_filter,
-                        limit=15,
+                        limit=self.QDRANT_LIMIT,
                     )
                 else:
                     results = await self.client.query_points(
                         collection_name=self.CHILD_COLL,
                         prefetch=[
-                            models.Prefetch(query=t_query, using="text", limit=15),
-                            models.Prefetch(query=i_query, using="image", limit=15),
+                            models.Prefetch(query=t_query, using="text", limit=self.QDRANT_LIMIT),
+                            models.Prefetch(query=i_query, using="image", limit=self.QDRANT_LIMIT),
                             models.Prefetch(
                                 query=sparse_vec,
                                 using="text-sparse",
-                                limit=15,
+                                limit=self.QDRANT_LIMIT,
                             ),
                         ],
                         query=models.FusionQuery(fusion=models.Fusion.RRF),
                         query_filter=query_filter,
                         score_threshold=0.2,
-                        limit=15,
+                        limit=self.QDRANT_LIMIT,
                     )
                 for hit in results.points:
                     if hit.id not in seen_ids:
