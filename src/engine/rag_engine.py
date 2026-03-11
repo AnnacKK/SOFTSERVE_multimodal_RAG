@@ -476,10 +476,10 @@ class MultimodalRAG:
                                 )
 
                         seen_parents_text_content.append(parent_doc)
-
+            print(f"DEBUG: sorted_hits scores: {[h.score for h in sorted_hits[:3]]}")
             if not seen_parents_payloads:
                 return {
-                    "headline": "No Results",
+                    "headline": len(seen_parents_payloads),
                     "answer": "I couldn't find any relevant snippets in the database for this query.",
                     "confidence_score": 0,
                     "sources": []

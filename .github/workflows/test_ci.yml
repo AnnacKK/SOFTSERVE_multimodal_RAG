@@ -63,10 +63,13 @@ jobs:
 
       - name: Install & Background Ollama
         run: |
-          curl -fsSL https://ollama.com/install.sh | sh
-          nohup ollama serve > ollama.log 2>&1 &
-          sleep 10
-          ollama pull qwen2.5:1.5b
+            curl -fsSL https://ollama.com/install.sh | sh
+            nohup ollama serve > ollama.log 2>&1 &
+            # Wait for the server to respond
+            until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done
+            ollama pull qwen2.5:1.5b
+            # Wait for the model to be actually pulled and loaded
+            sleep 30
 
       - name: Sanitize Test Files
         run: |

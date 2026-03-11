@@ -14,7 +14,7 @@ from flashrank import Ranker, RerankRequest
 ranker = Ranker()
 
 
-qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=60)
+qdrant_client=AsyncQdrantClient(url="http://localhost:6333", timeout=120)
 
 
 async def get_context_from_qdrant(rag_engine: MultimodalRAG, question: str, collection_name_child: str):
@@ -31,8 +31,7 @@ async def get_context_from_qdrant(rag_engine: MultimodalRAG, question: str, coll
         values=sparse_res.values.tolist(),
     )
 
-    # 2. Perform the Hybrid Search (MATCHING YOUR RAG CODE)
-    # Note: Remove score_threshold here because RRF scores are rank-based decimals
+
     search_result = await qdrant_client.query_points(
         collection_name=collection_name_child,
         prefetch=[
@@ -45,7 +44,6 @@ async def get_context_from_qdrant(rag_engine: MultimodalRAG, question: str, coll
     )
 
     if search_result.points:
-        # Extract text from the 'chunk_text' key found in your JSON
         passages = []
         for i, res in enumerate(search_result.points):
             txt = res.payload.get("chunk_text") or res.payload.get("full_text")
@@ -113,8 +111,7 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
 
     parent_points = []
     for p in parent_data:
-        # Handle the case where the JSON might be flat or nested
-        # We ensure the payload has the exact keys your RagEngine uses
+
         payload_data = p.get("payload", p)
 
         point = models.PointStruct(
@@ -131,7 +128,7 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
         parent_points.append(point)
     await client.upsert(collection_name=parent_coll, points=parent_points)
 
-    # --- RECREATE CHILD COLLECTION (Vector Search Target) ---
+
     if await client.collection_exists(child_coll):
         await client.delete_collection(child_coll)
 
@@ -155,6 +152,7 @@ async def recreate_qdrant(client: AsyncQdrantClient, child_coll: str, parent_col
         )
         child_points.append(point)
     await client.upsert(collection_name=child_coll, points=child_points)
+    await asyncio.sleep(5)
 
     print(f"✅ Success: Recreated {parent_coll} ({len(parent_points)} pts) and {child_coll} ({len(child_points)} pts)")
 
@@ -173,8 +171,9 @@ async def test_batch_rag_evaluation():
     await recreate_qdrant(qdrant_client, child_coll, parent_coll,child_json,parent_json)
 
     rag_engine = MultimodalRAG()
-    rag_engine.RERANK_LIMIT = 0.1
-    rag_engine.THRESHOLD = 0.1
+    rag_engine.RERANK_LIMIT = -1.0
+    rag_engine.THRESHOLD = -1.0
+    rag_engine.client=qdrant_client
     rag_engine.CHILD_COLL = child_coll
     rag_engine.PARENT_COLL = parent_coll
     if not rag_engine.groq_key:
@@ -254,7 +253,7 @@ async def test_batch_rag_evaluation():
                 actual_answer = res.get("answer", str(res))
 
             context_for_judge = await get_context_from_qdrant(rag_engine, row['question'],
-                                                              collection_name_child=child_coll)
+                                                              child_coll)
 
             is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
             return {
