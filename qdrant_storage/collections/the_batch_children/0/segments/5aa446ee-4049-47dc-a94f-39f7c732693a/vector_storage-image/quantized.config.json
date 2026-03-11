@@ -1,1 +1,0 @@
-{"quantization_config":{"binary":{"always_ram":true}},"vector_parameters":{"dim":512,"distance_type":"Dot","invert":false},"storage_type":"Mutable"}
