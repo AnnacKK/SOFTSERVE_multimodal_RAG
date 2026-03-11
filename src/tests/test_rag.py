@@ -171,8 +171,8 @@ async def test_batch_rag_evaluation():
     await recreate_qdrant(qdrant_client, child_coll, parent_coll,child_json,parent_json)
 
     rag_engine = MultimodalRAG()
-    rag_engine.RERANK_LIMIT = -1.0
-    rag_engine.THRESHOLD = -1.0
+    rag_engine.RERANK_LIMIT = 0.3
+    rag_engine.THRESHOLD = 0.3
     rag_engine.client=qdrant_client
     rag_engine.CHILD_COLL = child_coll
     rag_engine.PARENT_COLL = parent_coll
@@ -189,7 +189,6 @@ async def test_batch_rag_evaluation():
     test_df = pd.DataFrame(test_samples)
     test_df["ground_truth"] = "N/A"
 
-    # In src/tests/test_rag.py inside test_batch_rag_evaluation()
 
     def model_predict(df: pd.DataFrame):
         async def wrapped_predict(q):
@@ -212,7 +211,7 @@ async def test_batch_rag_evaluation():
                     return f"Error: {str(e)}"
 
         async def run_batch():
-            # Added a tiny sleep to respect rate limits between Giskard queries
+
             results = []
             for q in df["question"]:
                 results.append(await wrapped_predict(q))

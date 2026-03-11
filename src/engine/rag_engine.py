@@ -362,7 +362,7 @@ class MultimodalRAG:
                         query=i_query,
                         using="image",
                         query_filter=query_filter,
-                        limit=config.RERANKER_K,
+                        limit=15,
                     )
                 elif mode == "Text":
                     results = await self.client.query_points(
@@ -370,24 +370,24 @@ class MultimodalRAG:
                         query=t_query,
                         using="text",
                         query_filter=query_filter,
-                        limit=config.RERANKER_K,
+                        limit=15,
                     )
                 else:
                     results = await self.client.query_points(
                         collection_name=self.CHILD_COLL,
                         prefetch=[
-                            models.Prefetch(query=t_query, using="text", limit=10),
-                            models.Prefetch(query=i_query, using="image", limit=10),
+                            models.Prefetch(query=t_query, using="text", limit=15),
+                            models.Prefetch(query=i_query, using="image", limit=15),
                             models.Prefetch(
                                 query=sparse_vec,
                                 using="text-sparse",
-                                limit=10,
+                                limit=15,
                             ),
                         ],
                         query=models.FusionQuery(fusion=models.Fusion.RRF),
                         query_filter=query_filter,
-                        #score_threshold=0.2,
-                        limit=config.RERANKER_K,
+                        score_threshold=0.2,
+                        limit=15,
                     )
                 for hit in results.points:
                     if hit.id not in seen_ids:
@@ -422,7 +422,7 @@ class MultimodalRAG:
 
             for hit in sorted_hits:
                 p_id = hit.payload.get("parent_id")
-                if hit.score < self.RERANK_LIMIT:
+                if hit.score < self.RERANK_LIMIT: #not add bad rerank chunks
                     continue
                 if p_id and p_id not in unique_p_ids:
                     scores.append(hit.score)
@@ -433,7 +433,7 @@ class MultimodalRAG:
                             ids=[p_id],
                         ),
                     )
-                if len(unique_p_ids) >= 6:
+                if len(unique_p_ids) >= 10:
                     break
 
             parent_results = await asyncio.gather(*fetch_tasks)
