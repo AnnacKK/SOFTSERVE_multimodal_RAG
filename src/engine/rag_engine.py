@@ -388,7 +388,7 @@ class MultimodalRAG:
                         query=models.FusionQuery(fusion=models.Fusion.RRF),
                         query_filter=query_filter,
                         #score_threshold=0.2,
-                        limit=-1,
+                        limit=-1,#experimental tracking
                     )
                 for hit in results.points:
                     if hit.id not in seen_ids:
