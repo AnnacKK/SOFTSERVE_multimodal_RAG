@@ -8,3 +8,6 @@ src/monitoring_DB/*.db
 hf_cache/
 .DS_Store
 Thumbs.db
+qdrant_storage/
+**/__pycache__/
+*.pyc

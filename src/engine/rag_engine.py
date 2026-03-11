@@ -55,7 +55,7 @@ class MultimodalRAG:
             device="cpu",
             activation_fn=nn.Sigmoid(),
         )
-        self.lock = asyncio.Semaphore(1)
+        self.lock = asyncio.Semaphore(3)
         self.CHILD_COLL = config.CHILD_COLL
         self.PARENT_COLL = config.PARENT_COLL
         self.THRESHOLD = 0.3
