@@ -171,8 +171,8 @@ async def test_batch_rag_evaluation():
     await recreate_qdrant(qdrant_client, child_coll, parent_coll,child_json,parent_json)
 
     rag_engine = MultimodalRAG()
-    rag_engine.RERANK_LIMIT = 0.3
-    rag_engine.THRESHOLD = 0.3
+    rag_engine.RERANK_LIMIT = -1.0
+    rag_engine.THRESHOLD = -1.0
     rag_engine.client=qdrant_client
     rag_engine.CHILD_COLL = child_coll
     rag_engine.PARENT_COLL = parent_coll

@@ -62,8 +62,8 @@ async def test_recreate_and_retrieve():
     rag.PARENT_COLL = parent_coll
 
     # CRITICAL: Force the gates open so we can see ANY match
-    rag.RERANK_LIMIT = 0.1
-    rag.THRESHOLD = 0.1
+    rag.RERANK_LIMIT = 0.3
+    rag.THRESHOLD = 0.3
 
     question = "What is the latest in transformer world models?"
     print(f"\n--- Testing Query: {question} ---")
