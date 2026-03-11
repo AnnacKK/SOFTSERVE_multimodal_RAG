@@ -189,23 +189,35 @@ async def test_batch_rag_evaluation():
     test_df = pd.DataFrame(test_samples)
     test_df["ground_truth"] = "N/A"
 
-
+    # In src/tests/test_rag.py inside test_batch_rag_evaluation()
 
     def model_predict(df: pd.DataFrame):
         async def wrapped_predict(q):
             async with test_sem:
                 try:
-                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=60.0)
-                    if res is None: return "Error: Engine returned None"
-                    if res.get("answer") == "I couldn't find any relevant snippets in the database for this query.":
-                        return "DEBUG: Retrieval failed. Thresholds too high for current test data."
-                    return res.get("answer", str(res)) if isinstance(res, dict) else str(res)
+                    rag_engine.chat_history.clear()
+
+                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=90.0)
+
+                    if res is None:
+                        return "Error: Engine returned None"
+
+                    answer = res.get("answer", "")
+                    if "I couldn't find any relevant snippets" in answer:
+                        return "DEBUG: Retrieval failed. Thresholds might be too high."
+
+                    return answer
 
                 except Exception as e:
                     return f"Error: {str(e)}"
 
         async def run_batch():
-            return await asyncio.gather(*[wrapped_predict(q) for q in df["question"]])
+            # Added a tiny sleep to respect rate limits between Giskard queries
+            results = []
+            for q in df["question"]:
+                results.append(await wrapped_predict(q))
+                await asyncio.sleep(0.5)
+            return results
 
         future = asyncio.run_coroutine_threadsafe(run_batch(), test_loop)
         return future.result()

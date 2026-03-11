@@ -305,7 +305,7 @@ class MultimodalRAG:
         query_str,
         bypass_cache: bool = False,
         category=None,
-        mode="Hybrid"
+        mode="Hybrid",use_history=True
     ):
         if not bypass_cache:
             cached = await self.get_semantic_cache(query_str)
@@ -323,6 +323,9 @@ class MultimodalRAG:
                         ),
                     ],
                 )
+
+            if not use_history: #clear history only in testing
+                self.chat_history.clear()
 
             variations = await self.generate_variations(query_str)
             queries = [query_str, *variations]
@@ -554,7 +557,6 @@ class MultimodalRAG:
 
             except (asyncio.TimeoutError, Exception):
                 self.chat_history.clear()
-
                 final_answer = "⚠️ System is unresponsive. Please try again."
 
             if "⚠️" not in final_answer:
