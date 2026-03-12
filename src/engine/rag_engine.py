@@ -56,6 +56,7 @@ class MultimodalRAG:
             activation_fn=nn.Sigmoid(),
         )
         self.lock = asyncio.Semaphore(1)
+        self.llm_lock = asyncio.Semaphore(2)
         self.CHILD_COLL = config.CHILD_COLL
         self.PARENT_COLL = config.PARENT_COLL
         self.THRESHOLD = 0.3
@@ -320,10 +321,8 @@ class MultimodalRAG:
             if cached:
                 return cached
 
-
-
         if category:
-            models.Filter(
+            query_filter = models.Filter(
                 must=[
                     models.FieldCondition(
                         key="type",
@@ -353,6 +352,7 @@ class MultimodalRAG:
                         models.Prefetch(query=sparse_vec, using="text-sparse", limit=self.QDRANT_LIMIT),
                     ],
                     query=models.FusionQuery(fusion=models.Fusion.RRF),
+                    #query_points=query_filter,
                     limit=self.QDRANT_LIMIT,
                 )
                 for hit in results.points:
@@ -485,12 +485,6 @@ class MultimodalRAG:
                 "confidence_score": 0,
             }
 
-        prompt_text = self.base_prompt.format(
-            context=combined_context,
-            question=query_str,
-            history=trimmed_history,
-        )
-
         if (
             best_score < self.THRESHOLD
             and self.reranker_scores_report(scores).get("median_scores") < 0.1
@@ -502,42 +496,56 @@ class MultimodalRAG:
                 "image_b64": "",
             }
 
+
+
         base_text = ""
-        try:
-            chat_completion = await self.groq_client.chat.completions.create(
-                messages=self.create_message(prompt_text, images_and_descriptions),
-                model=self.model_id,
-                **self.base_model_kwargs,
-            )
 
-            async for chunk in chat_completion:
-                if chunk.choices[0].delta.content:
-                    token = chunk.choices[0].delta.content
-                    base_text += token
 
-            judge_prompt_text = self.critique_chain.format(
-                context=combined_context,
-                question=query_str,
-                answer=base_text,
-            )
+        async with self.llm_lock:
+            try:
+                prompt_text = self.base_prompt.format(
+                    context=combined_context,
+                    question=query_str,
+                    history=trimmed_history,
+                )
+                chat_completion = await self.groq_client.chat.completions.create(
+                    messages=self.create_message(prompt_text, images_and_descriptions),
+                    model=self.model_id,
+                    **self.base_model_kwargs,
+                )
 
-            judge_completion = await self.groq_client.chat.completions.create(
-                messages=self.create_message(
-                    judge_prompt_text,
-                    images_and_descriptions,
-                ),
-                model=self.model_id,
-                **self.judge_model_kwargs,
-            )
-            final_answer = ""
-            async for chunk in judge_completion:
-                if chunk.choices[0].delta.content:
-                    token = chunk.choices[0].delta.content
-                    final_answer += token
+                async for chunk in chat_completion:
+                    if chunk.choices[0].delta.content:
+                        token = chunk.choices[0].delta.content
+                        base_text += token
 
-        except (asyncio.TimeoutError, Exception):
-            self.chat_history.clear()
-            final_answer = "⚠️ System is unresponsive. Please try again."
+                judge_prompt_text = self.critique_chain.format(
+                    context=combined_context,
+                    question=query_str,
+                    answer=base_text,
+                )
+
+                judge_completion = await self.groq_client.chat.completions.create(
+                    messages=self.create_message(
+                        judge_prompt_text,
+                        images_and_descriptions,
+                    ),
+                    model=self.model_id,
+                    **self.judge_model_kwargs,
+                )
+                final_answer = ""
+                async for chunk in judge_completion:
+                    if chunk.choices[0].delta.content:
+                        token = chunk.choices[0].delta.content
+                        final_answer += token
+
+            except (asyncio.TimeoutError, Exception):
+                self.chat_history.clear()
+                return {
+                    "headline": "Service Timeout",
+                    "answer": "⚠️ System is unresponsive. Please try again.",
+                    "sources": []
+                }
 
         if "⚠️" not in final_answer:
             self.chat_history.add_user_message(query_str)

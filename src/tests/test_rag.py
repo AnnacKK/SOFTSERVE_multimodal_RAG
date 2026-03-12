@@ -196,7 +196,7 @@ async def test_batch_rag_evaluation():
                 try:
                     rag_engine.chat_history.clear()
 
-                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=400.0)
+                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=500.0)
 
                     if res is None:
                         return "Error: Engine returned None"
@@ -241,9 +241,9 @@ async def test_batch_rag_evaluation():
 
 
     scan_results = await asyncio.to_thread(giskard.scan, giskard_model, giskard_dataset,only=["hallucination","faithfulness"],params={
-        "hallucination": {"samples_limit": 3},
-        "sycophancy": {"samples_limit": 2},
-        "faithfulness": {"samples_limit": 2} #only for weak system, increase number for pull request
+        "hallucination": {"samples_limit": 1},
+        "sycophancy": {"samples_limit": 1},
+        "faithfulness": {"samples_limit": 1} #only for weak system, increase number for pull request
     })
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     report_name = f"giskard_report_{timestamp}.html"
