@@ -321,9 +321,8 @@ class MultimodalRAG:
 
 
 
-        query_filter = None
         if category:
-            query_filter = models.Filter(
+            models.Filter(
                 must=[
                     models.FieldCondition(
                         key="type",
