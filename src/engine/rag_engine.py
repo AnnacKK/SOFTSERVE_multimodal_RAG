@@ -55,12 +55,13 @@ class MultimodalRAG:
             device="cpu",
             activation_fn=nn.Sigmoid(),
         )
-        self.lock = asyncio.Semaphore(2)
+        self.lock = asyncio.Semaphore(1)
         self.CHILD_COLL = config.CHILD_COLL
         self.PARENT_COLL = config.PARENT_COLL
         self.THRESHOLD = 0.3
         self.RERANK_LIMIT = 0.6
-        self.QDRANT_LIMIT=20
+        self.QDRANT_LIMIT=15
+        self.CANDIDATES_LIMIT=4
         self.groq_key = getattr(config, 'GR_TOKEN', None) or os.getenv("GR_TOKEN")
 
         if not self.groq_key:
@@ -398,7 +399,7 @@ class MultimodalRAG:
                         ids=[p_id],
                     ),
                 )
-            if len(unique_p_ids) >= 6:
+            if len(unique_p_ids) >= self.CANDIDATES_LIMIT:
                 break
 
         parent_results = await asyncio.gather(*fetch_tasks)
