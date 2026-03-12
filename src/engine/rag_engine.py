@@ -322,7 +322,7 @@ class MultimodalRAG:
                 return cached
 
         if category:
-            query_filter = models.Filter(
+            models.Filter(
                 must=[
                     models.FieldCondition(
                         key="type",
