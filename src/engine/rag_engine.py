@@ -48,19 +48,19 @@ class MultimodalRAG:
         self.vision_model = SentenceTransformer(
             config.IMAGE_MODEL_NAME,
             device="cpu",
-            model_kwargs={"use_fast": True},
+            model_kwargs={"use_fast": True}
         )
         self.reranker = CrossEncoder(
             config.RERANKER_NAME,
             device="cpu",
             activation_fn=nn.Sigmoid(),
         )
-        self.lock = asyncio.Semaphore(3)
+        self.lock = asyncio.Semaphore(2)
         self.CHILD_COLL = config.CHILD_COLL
         self.PARENT_COLL = config.PARENT_COLL
         self.THRESHOLD = 0.3
         self.RERANK_LIMIT = 0.6
-        self.QDRANT_LIMIT=50
+        self.QDRANT_LIMIT=20
         self.groq_key = getattr(config, 'GR_TOKEN', None) or os.getenv("GR_TOKEN")
 
         if not self.groq_key:
@@ -301,6 +301,12 @@ class MultimodalRAG:
         except Exception:
             return [original_question]
 
+    async def get_all_vecs(self,q):
+        t = asyncio.to_thread(self.text_model.encode, q, normalize_embeddings=True)
+        i = asyncio.to_thread(self.vision_model.encode, q, normalize_embeddings=True)
+        s = asyncio.to_thread(list, self.sparse_model.embed([q]))
+        return await asyncio.gather(t, i, s)
+
     async def run_hybrid_rag(
         self,
         query_str,
@@ -313,83 +319,42 @@ class MultimodalRAG:
             if cached:
                 return cached
 
+
+
+        query_filter = None
+        if category:
+            query_filter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="type",
+                        match=models.MatchValue(value=category),
+                    ),
+                ],
+            )
+
+        if not use_history: #clear history only in testing
+            self.chat_history.clear()
+
         async with self.lock:
-            query_filter = None
-            if category:
-                query_filter = models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="type",
-                            match=models.MatchValue(value=category),
-                        ),
-                    ],
-                )
-
-            if not use_history: #clear history only in testing
-                self.chat_history.clear()
-
             variations = await self.generate_variations(query_str)
             queries = [query_str, *variations]
+            vector_results = await asyncio.gather(*[self.get_all_vecs(q) for q in queries])
 
             all_hits = []
             seen_ids = set()
-            for q in queries:
-                t_vec = await asyncio.to_thread(
-                    self.text_model.encode,
-                    q,
-                    normalize_embeddings=True,
-                )
-                t_query = t_vec.tolist()
+            for idx, (t_vec, i_vec, s_res) in enumerate(vector_results):
+                sparse_vec = models.SparseVector(indices=s_res[0].indices.tolist(), values=s_res[0].values.tolist())
 
-                i_vec = await asyncio.to_thread(
-                    self.vision_model.encode,
-                    q,
-                    normalize_embeddings=True,
+                results = await self.client.query_points(
+                    collection_name=self.CHILD_COLL,
+                    prefetch=[
+                        models.Prefetch(query=t_vec.tolist(), using="text", limit=self.QDRANT_LIMIT),
+                        models.Prefetch(query=i_vec.tolist(), using="image", limit=self.QDRANT_LIMIT),
+                        models.Prefetch(query=sparse_vec, using="text-sparse", limit=self.QDRANT_LIMIT),
+                    ],
+                    query=models.FusionQuery(fusion=models.Fusion.RRF),
+                    limit=self.QDRANT_LIMIT,
                 )
-                i_query = i_vec.tolist()
-                sparse_res_list = await asyncio.to_thread(
-                    list,
-                    self.sparse_model.embed([q]),
-                )
-                sparse_res = sparse_res_list[0]
-                sparse_vec = models.SparseVector(
-                    indices=sparse_res.indices.tolist(),
-                    values=sparse_res.values.tolist(),
-                )
-
-                if mode == "Visual":
-                    results = await self.client.query_points(
-                        collection_name=self.CHILD_COLL,
-                        query=i_query,
-                        using="image",
-                        query_filter=query_filter,
-                        limit=self.QDRANT_LIMIT,
-                    )
-                elif mode == "Text":
-                    results = await self.client.query_points(
-                        collection_name=self.CHILD_COLL,
-                        query=t_query,
-                        using="text",
-                        query_filter=query_filter,
-                        limit=self.QDRANT_LIMIT,
-                    )
-                else:
-                    results = await self.client.query_points(
-                        collection_name=self.CHILD_COLL,
-                        prefetch=[
-                            models.Prefetch(query=t_query, using="text", limit=self.QDRANT_LIMIT),
-                            models.Prefetch(query=i_query, using="image", limit=self.QDRANT_LIMIT),
-                            models.Prefetch(
-                                query=sparse_vec,
-                                using="text-sparse",
-                                limit=self.QDRANT_LIMIT,
-                            ),
-                        ],
-                        query=models.FusionQuery(fusion=models.Fusion.RRF),
-                        query_filter=query_filter,
-                        #score_threshold=0.2,
-                        limit=config.RERANKER_K #experimental tracking
-                    )
                 for hit in results.points:
                     if hit.id not in seen_ids:
                         all_hits.append(hit)
@@ -413,183 +378,196 @@ class MultimodalRAG:
             except Exception:
                 pass
 
-            sorted_hits = sorted(all_hits, key=lambda x: x.score, reverse=True)
-            best_score = sorted_hits[0].score
+        sorted_hits = sorted(all_hits, key=lambda x: x.score, reverse=True)
+        best_score = sorted_hits[0].score
 
-            fetch_tasks = []
-            unique_p_ids = []
-            seen_headlines = set()
-            scores = []
+        fetch_tasks = []
+        unique_p_ids = []
+        seen_headlines = set()
+        scores = []
 
-            for hit in sorted_hits:
-                p_id = hit.payload.get("parent_id")
-                if hit.score < self.RERANK_LIMIT: #not add bad rerank chunks
-                    continue
-                if p_id and p_id not in unique_p_ids:
-                    scores.append(hit.score)
-                    unique_p_ids.append(p_id)
-                    fetch_tasks.append(
-                        self.client.retrieve(
-                            collection_name=self.PARENT_COLL,
-                            ids=[p_id],
-                        ),
+        for hit in sorted_hits:
+            p_id = hit.payload.get("parent_id")
+            if hit.score < self.RERANK_LIMIT: #not add bad rerank chunks
+                continue
+            if p_id and p_id not in unique_p_ids:
+                scores.append(hit.score)
+                unique_p_ids.append(p_id)
+                fetch_tasks.append(
+                    self.client.retrieve(
+                        collection_name=self.PARENT_COLL,
+                        ids=[p_id],
+                    ),
+                )
+            if len(unique_p_ids) >= 6:
+                break
+
+        parent_results = await asyncio.gather(*fetch_tasks)
+
+        # ---  SMALL-TO-BIG EXPANSION ---
+        seen_ids = set()
+        seen_parents_text_content = []
+        seen_parents_payloads = []
+        sources = []
+        images_and_descriptions = []
+        temp_imgs=[]
+        image_tasks=[]
+
+        for doc_list in parent_results:
+            if doc_list:
+                payload = doc_list[0].payload
+                headline = payload.get("headline", "Untitled")
+                if headline not in seen_headlines:
+                    seen_headlines.add(headline)
+                    seen_parents_payloads.append(payload)
+                    idx = len(seen_parents_payloads)
+                    sources.append({"title": headline, "url": payload.get("url")})
+                    parent_doc = Document(
+                        page_content=payload.get("full_text"),
+                        metadata={
+                            "index": idx,
+                            "title": headline,
+                        },
                     )
-                if len(unique_p_ids) >= 6:
-                    break
-
-            parent_results = await asyncio.gather(*fetch_tasks)
-
-            # ---  SMALL-TO-BIG EXPANSION ---
-            seen_ids = set()
-            seen_parents_text_content = []
-            seen_parents_payloads = []
-            sources = []
-            images_and_descriptions = []
-
-            for doc_list in parent_results:
-                if doc_list:
-                    payload = doc_list[0].payload
-                    headline = payload.get("headline", "Untitled")
-                    if headline not in seen_headlines:
-                        seen_headlines.add(headline)
-                        seen_parents_payloads.append(payload)
-                        idx = len(seen_parents_payloads)
-                        sources.append({"title": headline, "url": payload.get("url")})
-                        parent_doc = Document(
-                            page_content=payload.get("full_text"),
-                            metadata={
-                                "index": idx,
-                                "title": headline,
-                            },
+                    raw_img = payload.get("image_b64", "")
+                    if len(raw_img) > 100:
+                        pure_string = (
+                            raw_img.split(",")[-1] if "," in raw_img else raw_img
                         )
-                        raw_img = payload.get("image_b64", "")
-                        if len(raw_img) > 100:
-                            pure_string = (
-                                raw_img.split(",")[-1] if "," in raw_img else raw_img
-                            )
-                            pure_string = "".join(pure_string.split())
-                            desc = await self.describe_image(pure_string, [headline])
+                        pure_string = "".join(pure_string.split())
+                        task = self.describe_image(pure_string, [headline])
+                        image_tasks.append(task)
+                        temp_imgs.append(pure_string)
 
-                            # Only add to gallery if it's NOT a logo
-                            if "logo" not in desc.lower():
-                                images_and_descriptions.append(
-                                    {
-                                        "image": pure_string,
-                                        "description": desc,
-                                    },
-                                )
+                        # Only add to gallery if it's NOT a logo
+                        # if "logo" not in desc.lower():
+                        #     images_and_descriptions.append(
+                        #         {
+                        #             "image": pure_string,
+                        #             "description": desc,
+                        #         },
+                        #     )
 
-                        seen_parents_text_content.append(parent_doc)
-            print(f"DEBUG: sorted_hits scores: {[h.score for h in sorted_hits]}")
+                    seen_parents_text_content.append(parent_doc)
 
-            if not seen_parents_payloads:
-                return {
-                    "headline": "No Relevant Context",
-                    "answer": "I couldn't find any relevant snippets in the database for this query.",
-                    "confidence_score": 0,
-                    "sources": []
-                }
+        #async logo picking
+        all_descs = await asyncio.gather(*image_tasks) if image_tasks else []
+        images_and_descriptions = [
+            {"image": i, "description": d}
+            for i, d in zip(temp_imgs, all_descs)
+            # check if 'd' is a string before checking for "logo"
+            if isinstance(d, str) and "logo" not in d.lower()
+        ]
+        print(f"DEBUG: sorted_hits scores: {[h.score for h in sorted_hits]}")
+
+        if not seen_parents_payloads:
+            return {
+                "headline": "No Relevant Context",
+                "answer": "I couldn't find any relevant snippets in the database for this query.",
+                "confidence_score": 0,
+                "sources": []
+            }
 
 
-            combined_context = "\n\n---\n\n".join(
-                [doc.page_content for doc in seen_parents_text_content],
+        combined_context = "\n\n---\n\n".join(
+            [doc.page_content for doc in seen_parents_text_content],
+        )
+
+        top_parent = seen_parents_payloads[0]
+        trimmed_history = self.trimer.invoke(self.chat_history.messages)
+
+        if not seen_parents_payloads or not seen_parents_payloads[0].get(
+            "full_text",
+        ):
+            return {
+                "headline": "Error",
+                "answer": "No context found to analyze.",
+                "confidence_score": 0,
+            }
+
+        prompt_text = self.base_prompt.format(
+            context=combined_context,
+            question=query_str,
+            history=trimmed_history,
+        )
+
+        if (
+            best_score < self.THRESHOLD
+            and self.reranker_scores_report(scores).get("median_scores") < 0.1
+        ):
+            return {
+                "headline": "No Direct Match Found",
+                "answer": "I found some articles, but nothing specifically answering your question.",
+                "confidence_score": best_score,
+                "image_b64": "",
+            }
+
+        base_text = ""
+        try:
+            chat_completion = await self.groq_client.chat.completions.create(
+                messages=self.create_message(prompt_text, images_and_descriptions),
+                model=self.model_id,
+                **self.base_model_kwargs,
             )
 
-            top_parent = seen_parents_payloads[0]
-            trimmed_history = self.trimer.invoke(self.chat_history.messages)
+            async for chunk in chat_completion:
+                if chunk.choices[0].delta.content:
+                    token = chunk.choices[0].delta.content
+                    base_text += token
 
-            if not seen_parents_payloads or not seen_parents_payloads[0].get(
-                "full_text",
-            ):
-                return {
-                    "headline": "Error",
-                    "answer": "No context found to analyze.",
-                    "confidence_score": 0,
-                }
-
-            prompt_text = self.base_prompt.format(
+            judge_prompt_text = self.critique_chain.format(
                 context=combined_context,
                 question=query_str,
-                history=trimmed_history,
+                answer=base_text,
             )
 
-            if (
-                best_score < self.THRESHOLD
-                and self.reranker_scores_report(scores).get("median_scores") < 0.1
-            ):
-                return {
-                    "headline": "No Direct Match Found",
-                    "answer": "I found some articles, but nothing specifically answering your question.",
-                    "confidence_score": best_score,
-                    "image_b64": "",
-                }
-
-            base_text = ""
-            try:
-                chat_completion = await self.groq_client.chat.completions.create(
-                    messages=self.create_message(prompt_text, images_and_descriptions),
-                    model=self.model_id,
-                    **self.base_model_kwargs,
-                )
-
-                async for chunk in chat_completion:
-                    if chunk.choices[0].delta.content:
-                        token = chunk.choices[0].delta.content
-                        base_text += token
-
-                judge_prompt_text = self.critique_chain.format(
-                    context=combined_context,
-                    question=query_str,
-                    answer=base_text,
-                )
-
-                judge_completion = await self.groq_client.chat.completions.create(
-                    messages=self.create_message(
-                        judge_prompt_text,
-                        images_and_descriptions,
-                    ),
-                    model=self.model_id,
-                    **self.judge_model_kwargs,
-                )
-                final_answer = ""
-                async for chunk in judge_completion:
-                    if chunk.choices[0].delta.content:
-                        token = chunk.choices[0].delta.content
-                        final_answer += token
-
-            except (asyncio.TimeoutError, Exception):
-                self.chat_history.clear()
-                final_answer = "⚠️ System is unresponsive. Please try again."
-
-            if "⚠️" not in final_answer:
-                self.chat_history.add_user_message(query_str)
-                self.chat_history.add_ai_message(final_answer)
-            final_answer = final_answer.strip()
-            if final_answer.lower().startswith("here is"):
-                final_answer = "\n".join(final_answer.split("\n")[1:]).strip()
-                final_answer = final_answer.replace("*", "")
-
-            self.reranker_scores_report(scores) or {}
-
-            response_data = {
-                "headline": top_parent.get("headline", "Untitled"),
-                "answer": final_answer,
-                "image_description": images_and_descriptions[0]["description"]
-                if images_and_descriptions
-                else "No diagrams found.",
-                "gallery": images_and_descriptions,
-                "url": top_parent.get("url", "#"),
-                "type": top_parent.get("type"),
-                "full_text": top_parent["full_text"],
-                "confidence_score": self.reranker_scores_report(scores).get(
-                    "median_scores",
+            judge_completion = await self.groq_client.chat.completions.create(
+                messages=self.create_message(
+                    judge_prompt_text,
+                    images_and_descriptions,
                 ),
-                "sources": sources,
-                "context_text": [d.page_content for d in seen_parents_text_content],
-                "generation_variations": [str(q) for q in queries],
-            }
-            if "⚠️" not in final_answer:
-                await self.set_semantic_cache(query_str, response_data)
+                model=self.model_id,
+                **self.judge_model_kwargs,
+            )
+            final_answer = ""
+            async for chunk in judge_completion:
+                if chunk.choices[0].delta.content:
+                    token = chunk.choices[0].delta.content
+                    final_answer += token
+
+        except (asyncio.TimeoutError, Exception):
+            self.chat_history.clear()
+            final_answer = "⚠️ System is unresponsive. Please try again."
+
+        if "⚠️" not in final_answer:
+            self.chat_history.add_user_message(query_str)
+            self.chat_history.add_ai_message(final_answer)
+        final_answer = final_answer.strip()
+        if final_answer.lower().startswith("here is"):
+            final_answer = "\n".join(final_answer.split("\n")[1:]).strip()
+            final_answer = final_answer.replace("*", "")
+
+        self.reranker_scores_report(scores) or {}
+
+        response_data = {
+            "headline": top_parent.get("headline", "Untitled"),
+            "answer": final_answer,
+            "image_description": images_and_descriptions[0]["description"]
+            if images_and_descriptions
+            else "No diagrams found.",
+            "gallery": images_and_descriptions,
+            "url": top_parent.get("url", "#"),
+            "type": top_parent.get("type"),
+            "full_text": top_parent["full_text"],
+            "confidence_score": self.reranker_scores_report(scores).get(
+                "median_scores",
+            ),
+            "sources": sources,
+            "context_text": [d.page_content for d in seen_parents_text_content],
+            "generation_variations": [str(q) for q in queries],
+        }
+        if "⚠️" not in final_answer:
+            await self.set_semantic_cache(query_str, response_data)
         return response_data
 
     async def refine_answer(
