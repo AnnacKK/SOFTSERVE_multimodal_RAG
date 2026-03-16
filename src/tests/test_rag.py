@@ -257,54 +257,54 @@ async def test_batch_rag_evaluation():
 
     print("-----------STARTING SELF JUDGE---------------")
 
-    # async def run_judge(row):
-    #     async with test_sem:
-    #         res = await rag_engine.run_hybrid_rag(row['question'])
-    #         if res is None:
-    #             actual_answer = "Error: Engine returned None"
-    #         else:
-    #             actual_answer = res.get("answer", str(res))
-    #
-    #         context_for_judge = await get_context_from_qdrant(rag_engine, row['question'],
-    #                                                           child_coll)
-    #
-    #         is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
-    #         return {
-    #             "timestamp": datetime.datetime.now().isoformat(),
-    #             "question": row['question'],
-    #             "context_len": len(context_for_judge),
-    #             "context_snippet": context_for_judge[:200] + "...",  # Truncate for readability
-    #             "answer": actual_answer,
-    #             "judge_decision": "PASS" if is_relevant else "FAIL"
-    #         }
-    #
-    #
-    # judge_tasks = [run_judge(row) for _, row in test_df.iterrows()]
-    # judge_results = await asyncio.gather(*judge_tasks)
+    async def run_judge(row):
+        async with test_sem:
+            res = await rag_engine.run_hybrid_rag(row['question'])
+            if res is None:
+                actual_answer = "Error: Engine returned None"
+            else:
+                actual_answer = res.get("answer", str(res))
 
-    # judge_report_name = f"judge_results_{timestamp}.json"
-    # with open(judge_report_name, "w", encoding="utf-8") as f:
-    #     json.dump(judge_results, f, indent=4)
+            context_for_judge = await get_context_from_qdrant(rag_engine, row['question'],
+                                                              child_coll)
 
-    # print(f"✅ Judge results saved to {judge_report_name}")
+            is_relevant = qwen_judge_relevance(row['question'], actual_answer, context_for_judge)
+            return {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "question": row['question'],
+                "context_len": len(context_for_judge),
+                "context_snippet": context_for_judge[:200] + "...",  # Truncate for readability
+                "answer": actual_answer,
+                "judge_decision": "PASS" if is_relevant else "FAIL"
+            }
 
-    # if os.getenv("GITHUB_STEP_SUMMARY"):
-    #     with open(os.getenv("GITHUB_STEP_SUMMARY"), "a") as summary:
-    #         summary.write("### ⚖️ LLM Judge Results\n")
-    #         summary.write("| Question | Decision | Answer Preview |\n")
-    #         summary.write("| :--- | :--- | :--- |\n")
-    #         for r in judge_results:
-    #             icon = "✅" if r["judge_decision"] == "PASS" else "❌"
-    #             summary.write(f"| {r['question']} | {icon} {r['judge_decision']} | {r['answer'][:50]}... |\n")
-    #
-    #         summary.write("\n### 🛡️ Giskard Scan\n")
-    #         summary.write(f"- Issues Found: {len(scan_results.issues)}\n")
-    #         summary.write(
-    #             f"- [View Full HTML Report]({os.getenv('GITHUB_SERVER_URL')}/{os.getenv('GITHUB_REPOSITORY')}/actions/runs/{os.getenv('GITHUB_RUN_ID')})\n")
-    #
-    #
-    # judge_fails = [r for r in judge_results if r["judge_decision"] == "FAIL"]
-    # assert not judge_fails, f"❌ Judge failed {len(judge_fails)} cases. Check {judge_report_name}"
+
+    judge_tasks = [run_judge(row) for _, row in test_df.iterrows()]
+    judge_results = await asyncio.gather(*judge_tasks)
+
+    judge_report_name = f"judge_results_{timestamp}.json"
+    with open(judge_report_name, "w", encoding="utf-8") as f:
+        json.dump(judge_results, f, indent=4)
+
+    print(f"✅ Judge results saved to {judge_report_name}")
+
+    if os.getenv("GITHUB_STEP_SUMMARY"):
+        with open(os.getenv("GITHUB_STEP_SUMMARY"), "a") as summary:
+            summary.write("### ⚖️ LLM Judge Results\n")
+            summary.write("| Question | Decision | Answer Preview |\n")
+            summary.write("| :--- | :--- | :--- |\n")
+            for r in judge_results:
+                icon = "✅" if r["judge_decision"] == "PASS" else "❌"
+                summary.write(f"| {r['question']} | {icon} {r['judge_decision']} | {r['answer'][:50]}... |\n")
+
+            summary.write("\n### 🛡️ Giskard Scan\n")
+            summary.write(f"- Issues Found: {len(scan_results.issues)}\n")
+            summary.write(
+                f"- [View Full HTML Report]({os.getenv('GITHUB_SERVER_URL')}/{os.getenv('GITHUB_REPOSITORY')}/actions/runs/{os.getenv('GITHUB_RUN_ID')})\n")
+
+
+    judge_fails = [r for r in judge_results if r["judge_decision"] == "FAIL"]
+    assert not judge_fails, f"❌ Judge failed {len(judge_fails)} cases. Check {judge_report_name}"
     major_issues = [issue for issue in scan_results.issues if issue.level == "major"]
     assert not major_issues, f"❌ Giskard found {len(major_issues)} MAJOR issues. Check report."
     await qdrant_client.close()
