@@ -197,8 +197,9 @@ async def test_batch_rag_evaluation():
                     q = str(q_str) if pd.notna(q_str) else ""
 
                     if not q.strip() or q.lower() == 'nan':
-                        return "I am sorry, but the provided query was empty or invalid." #rag_engine.chat_history.clear()
+                        return "I am sorry, but the provided query was empty or invalid." #
 
+                    rag_engine.chat_history.clear()
                     res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=500.0)
 
                     if res is None:
@@ -215,7 +216,15 @@ async def test_batch_rag_evaluation():
         async def run_batch():
             results = []
             for _, row in df.iterrows():
-                q = row.get('question') or row.get('query')
+                q_val = row.get('question')
+                query_val = row.get('query')
+
+                if pd.notna(q_val) and str(q_val).lower() != 'nan':
+                    q = q_val
+                elif pd.notna(query_val) and str(query_val).lower() != 'nan':
+                    q = query_val
+                else:
+                    q = ""  # Both were nan
                 results.append(await wrapped_predict(q))
                 await asyncio.sleep(0.2)
             return results
