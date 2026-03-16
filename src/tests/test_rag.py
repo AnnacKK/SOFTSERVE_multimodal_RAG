@@ -191,10 +191,13 @@ async def test_batch_rag_evaluation():
 
 
     def model_predict(df: pd.DataFrame):
-        async def wrapped_predict(q):
+        async def wrapped_predict(q_str):
             async with test_sem:
                 try:
-                    rag_engine.chat_history.clear()
+                    q = str(q_str) if pd.notna(q_str) else ""
+
+                    if not q.strip() or q.lower() == 'nan':
+                        return "I am sorry, but the provided query was empty or invalid." #rag_engine.chat_history.clear()
 
                     res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=500.0)
 
@@ -211,7 +214,8 @@ async def test_batch_rag_evaluation():
 
         async def run_batch():
             results = []
-            for q in df["question"]:
+            for _, row in df.iterrows():
+                q = row.get('question') or row.get('query')
                 results.append(await wrapped_predict(q))
                 await asyncio.sleep(0.2)
             return results
