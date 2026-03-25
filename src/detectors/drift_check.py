@@ -1,4 +1,3 @@
-import time
 import numpy as np
 from qdrant_client import QdrantClient
 from kubernetes import client, config
