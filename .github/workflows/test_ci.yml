@@ -137,7 +137,7 @@ jobs:
             ghcr.io/${{ env.IMAGE_NAME }}:latest
             ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
     # Job 4: Update ArgoCD Manifests
-    deploy-gitops:
+  deploy-gitops:
       needs: [ build-and-push ]
       runs-on: ubuntu-latest
       if: github.event_name == 'push'
