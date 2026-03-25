@@ -46,7 +46,6 @@ services:
       - ./src/monitoring_db:/app/src/monitoring_db
     environment:
         - API_URL=http://rag-api:8000
-        # 🟢 Ensure the dashboard knows where to look
         - MONITORING_DB_PATH=/app/src/monitoring_db/logs.db
     depends_on:
       rag-api:
@@ -73,8 +72,6 @@ services:
     environment:
       - QDRANT_HOST=qdrant_db
       - QDRANT_PORT=6333
-      # 🟢 DYNAMIC ROUTING: Uses .env if Colab is on, otherwise local host
-      - OLLAMA_BASE_URL=${OLLAMA_URL_COLLAB:-http://host.docker.internal:11434}
       - OLLAMA_NUM_PARALLEL=1 # Set to 1 for 1050 Ti stability
       - OLLAMA_MAX_LOADED_MODELS=1 # Force 1 model at a time to prevent OOM
       - PYTHONUNBUFFERED=1

@@ -1,6 +1,7 @@
 # The Batch RAG: Multimodal RAG from THE BATCH 
     V 0.1: Containers without Kuberflow, manual run (02/03/2026)
     V 0.2: Added CO and git actions (02/03/2026)
+    V 0.3: Added CD via ArgoCD and k8s with track of data drift 
 
 
 ![RAG](documentation/RAG.gif)

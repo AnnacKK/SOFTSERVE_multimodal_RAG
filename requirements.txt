@@ -20,14 +20,12 @@ giskard #testing
 nest-asyncio
 httpx
 
-langchain-community
 # Note: On Windows, simple torch install is often safer
 #torch
 --extra-index-url https://download.pytorch.org/whl/cpu #dowload loghtweight version (cpu)
 torch
 
 # --- Data Loading & Connectors ---
-playwright
 bs4
 Pillow
 unstructured
@@ -38,7 +36,7 @@ pydantic-settings
 python-dotenv
 python-multipart
 pandas
-
+kubernetes
 
 #api
 fastapi
@@ -54,8 +52,6 @@ sentence-transformers
 ragas
 datasets
 
-matplotlib
-seaborn
 eval_type_backport
 rouge-score
 nltk

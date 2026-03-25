@@ -19,7 +19,7 @@ RUN pip install --user --no-cache-dir \
     -r requirements.txt
 
 # --- STAGE 2: Final Image ---
-# 🟢 Use NVIDIA's CUDA base image if you want the container to handle the GPU tasks
+#Use NVIDIA's CUDA base image if you want the container to handle the GPU tasks
 # (SentenceTransformers/Reranker) instead of just the CPU.
 FROM python:3.11-slim
 LABEL authors="AnnacKK"
@@ -34,6 +34,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy installed libraries
 COPY --from=builder /root/.local /root/.local
+RUN mkdir -p /app/entrypoint
+COPY entrypoint/entrypoint.sh /app/entrypoint/entrypoint.sh
+RUN chmod +x /app/entrypoint/entrypoint.sh
 # Copy project structure
 COPY . .
 
@@ -41,10 +44,12 @@ COPY . .
 ENV PATH=/root/.local/bin:$PATH
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
-# 🟢 CRITICAL: Force local Ollama connection
+# CRITICAL: Force local Ollama connection
 ENV OLLAMA_BASE_URL="http://host.docker.internal:11434"
 
 EXPOSE 8000
 
+ENTRYPOINT ["/bin/bash", "/app/entrypoint/entrypoint.sh"]
+
 # uvicorn with more workers for local performance
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+#CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

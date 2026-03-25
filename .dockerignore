@@ -7,4 +7,5 @@ src/monitoring_DB/*.db
 .idea/
 .vscode/
 .documentation/
+.tests/
 qdrant_storage/

@@ -44,9 +44,6 @@ app = FastAPI(title="Oracle RAG WebSocket API", lifespan=lifespan)
 #     print("💓 Heartbeat Service Started")
 #     while True:
 #         try:
-#             # We use a tiny text-only prompt.
-#             # This keeps the 'ollama' process active in Colab.
-#             # Using engine.llm directly to reach the remote Colab instance.
 #             await engine.llm.ainvoke("keep-warm-ping")
 #             print("💓 Heartbeat: Remote Model is Warm.")
 #         except Exception as e:

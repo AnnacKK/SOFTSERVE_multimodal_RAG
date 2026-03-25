@@ -136,3 +136,29 @@ jobs:
           tags: |
             ghcr.io/${{ env.IMAGE_NAME }}:latest
             ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+    # Job 4: Update ArgoCD Manifests
+    deploy-gitops:
+      needs: [ build-and-push ]
+      runs-on: ubuntu-latest
+      if: github.event_name == 'push'
+      steps:
+        - name: Checkout Infra Repo
+          uses: actions/checkout@v4
+          with:
+            repository: AnnacKK/multimodal-rag-infra
+            token: ${{ secrets.GITOPS_TOKEN }}
+            path: infra
+
+        - name: Update K8s Manifest Tag
+          run: |
+            #
+            cd infra/base 
+            kustomize edit set image ghcr.io/annackk/multimodalrag=ghcr.io/annackk/softserve_multimodal_rag:${{ github.sha }}
+        - name: Commit and Push
+          run: |
+            cd infra
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "🚀 deploy: multimodal-rag version ${{ github.sha }}"
+            git push

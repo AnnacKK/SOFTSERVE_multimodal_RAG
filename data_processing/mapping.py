@@ -23,9 +23,12 @@ client = QdrantClient(host=qdrant_host, port=qdrant_port,timeout=60)
 
 CATEGORIES = {
     "Business": "https://www.deeplearning.ai/the-batch/tag/business/",
-"ML Research": "https://www.deeplearning.ai/the-batch/tag/research/",
+    "AI Careers": "https://www.deeplearning.ai/the-batch/tag/ai-careers/",
+    "Data Points": "https://www.deeplearning.ai/the-batch/tag/data-points/",
+    "ML Research": "https://www.deeplearning.ai/the-batch/tag/research/",
     "Weekly Issues": "https://www.deeplearning.ai/the-batch/",
     "Andrew's Letters": "https://www.deeplearning.ai/the-batch/tag/letters/",
+    "Science": "https://www.deeplearning.ai/the-batch/tag/science/",
     "Hardware": "https://www.deeplearning.ai/the-batch/tag/hardware/",
     "Culture": "https://www.deeplearning.ai/the-batch/tag/culture/"
 }
@@ -34,12 +37,11 @@ class QdrantScrapping:
     def __init__(self):
         self.client = client
         self.parent_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=2000,
+            chunk_size=3000,
             chunk_overlap=200,
             separators=["\n\n", "\n", ". ", " "]
         )
 
-        # 2. CHILD SPLITTER: Creates the "Search Snippets" for Qdrant
         self.child_splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
             chunk_overlap=50,

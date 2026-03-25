@@ -21,7 +21,6 @@ def load_data():
         return pd.DataFrame()
 
 
-# 2. App Header
 st.title("🛰️ The Batch: Oracle Performance Dashboard")
 
 with st.sidebar:

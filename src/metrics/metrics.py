@@ -166,8 +166,6 @@ class Evaluator:
         #     ragas_metrics, factcc_task, safety_task, nlp_task, interpret_task
         # )
 
-        # 🟢 3. CONSOLIDATE RESULTS
-        # Convert Ragas result to a flat dictionary
 
         try:
             report.update(

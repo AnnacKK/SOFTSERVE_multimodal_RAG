@@ -244,4 +244,4 @@ Dashboard for metrics tracking via Streamlit
 ![System Architecture](cache_collections.png)
 Qdrant has 3 collections: batch_children for search, parents_batch as storage, llm_cache is cache collections, where all answear stored to not run RAG several times for the same questions.
 
-
+"multimodalrag-rag-api", "multimodalrag-rag-dashboard", "qdrant/qdrant","multimodalrag-data_processing" | ForEach-Object { kind load docker-image "$_:latest" }
