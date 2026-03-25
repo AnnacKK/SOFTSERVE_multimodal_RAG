@@ -189,7 +189,7 @@ async def test_batch_rag_evaluation():
                     q = str(q_str) if pd.notna(q_str) else ""
 
                     if not q.strip() or q.lower() == 'nan':
-                        return "I am sorry, but the provided query was empty or invalid." #
+                        return "I am sorry, but I do not have enough information to answer that question."
 
                     rag_engine.chat_history.clear()
                     res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=500.0)
@@ -199,7 +199,7 @@ async def test_batch_rag_evaluation():
 
                     answer = res.get("answer", "")
                     if "I couldn't find any relevant snippets" in answer:
-                        return "I am sorry, but I do not have enough information to answer that question."
+                        return "I am sorry, plese refrase so i can search again later."
                     return answer
 
                 except Exception as e:
