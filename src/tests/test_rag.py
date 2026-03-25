@@ -61,14 +61,6 @@ async def get_context_from_qdrant(rag_engine: MultimodalRAG, question: str, coll
 
     return "No context found."
 
-# def run_async(coro):
-#     try:
-#         loop = asyncio.get_event_loop()
-#     except RuntimeError:
-#         loop = asyncio.new_event_loop()
-#         asyncio.set_event_loop(loop)
-#     return loop.run_until_complete(coro)
-
 
 def qwen_judge_relevance(question, answer, context):
     """The 'Oracle' judge using local Qwen"""
