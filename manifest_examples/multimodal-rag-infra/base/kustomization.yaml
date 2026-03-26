@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# List of existing files here
+resources:
+- docker-deployment.yml
+- docker_jobs_deployment.yml
+
+# allows GitHub Action to update the image tags
+images:
+- name: ghcr.io/annackk/multimodalrag
+  newName: ghcr.io/annackk/softserve_multimodal_rag
+  newTag: 468bacd664fc11a86234ccf7493e1235b8a25447

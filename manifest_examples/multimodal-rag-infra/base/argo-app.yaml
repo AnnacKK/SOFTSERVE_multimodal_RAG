@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: multimodal-rag
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/AnnacKK/multimodal-rag-infra.git
+    targetRevision: HEAD
+    path: base  # Points to kustomization.yaml folder
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -1,0 +1,94 @@
+# --- 1. INITIAL/MANUAL INGESTION (ArgoCD Hook) ---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-ingestion-init
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  template:
+    spec:
+      containers:
+      - name: processor
+        image: ghcr.io/annackk/multimodalrag:latest
+        command: ["python", "data_processing/mapping.py"]
+        envFrom:
+        - configMapRef:
+            name: rag-config
+      restartPolicy: OnFailure
+---
+# --- 2. WEEKLY SCHEDULED SYNC (Safety Net) ---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: data-ingestion-weekly
+spec:
+  schedule: "0 0 * * 0"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: processor
+            image: ghcr.io/annackk/multimodalrag:latest
+            command: ["python", "data_processing/mapping.py"]
+            envFrom:
+            - configMapRef:
+                name: rag-config
+          restartPolicy: OnFailure
+---
+# --- 3. DAILY DRIFT CHECK (Reactive Trigger) ---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-drift-check
+spec:
+  schedule: "0 0 * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: rag-api-sa
+          containers:
+          - name: detector
+            image: ghcr.io/annackk/multimodalrag:latest
+            command: ["python", "src/detectors/drift_check.py"]
+            env:
+            - name: TRIGGER_INGESTION
+              value: "true"
+            - name: TARGET_JOB_NAME
+              value: "data-ingestion-weekly"
+            envFrom:
+            - configMapRef:
+                name: rag-config
+          restartPolicy: OnFailure
+---
+# --- 4. RBAC (Unchanged but critical for the trigger) ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rag-api-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: job-manager
+rules:
+  - apiGroups: ["batch", ""]
+    resources: ["jobs", "pods"]
+    verbs: ["get", "list", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rag-api-job-binding
+subjects:
+  - kind: ServiceAccount
+    name: rag-api-sa
+roleRef:
+  kind: Role
+  name: job-manager
+  apiGroup: rbac.authorization.k8s.io
