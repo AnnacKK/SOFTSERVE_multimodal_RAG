@@ -51,6 +51,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -74,7 +76,10 @@ jobs:
             ollama pull qwen2.5:1.5b
             
             cd src/optimization/LoRa/lora_weights
+            sed -i 's/\r$//' Modelfile
+            
             ollama create qwen-tun -f Modelfile
+            
             ollama list
 
       - name: Sanitize Test Files
