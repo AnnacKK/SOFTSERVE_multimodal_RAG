@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 import json
 import os
 from qdrant_client import AsyncQdrantClient, models

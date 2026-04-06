@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from src.engine.rag_engine import MultimodalRAG
 
 
@@ -13,7 +12,7 @@ async def test_rag_functional_smoke_test():
     response = await rag.run_hybrid_rag(question)
 
     # 3. Validations
-    print(f"\n--- Sanity Check Results ---")
+    print("\n--- Sanity Check Results ---")
     print(f"Question: {question}")
 
 

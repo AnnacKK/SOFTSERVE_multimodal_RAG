@@ -24,7 +24,6 @@ def verify_stack():
 if __name__ == "__main__":
     verify_stack()
     try:
-        import unsloth
 
         print("✅ Unsloth imported successfully!")
     except Exception as e:
