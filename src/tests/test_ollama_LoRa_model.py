@@ -9,7 +9,7 @@ OLLAMA_BASE_URL = "http://localhost:11434"
 
 
 async def test_fine_tuned_model():
-    print(f"--- Testing Model: ---")
+    print("--- Testing Model: ---")
 
     try:
         llm =  ChatOllama(
@@ -39,10 +39,10 @@ async def test_fine_tuned_model():
             print("\n⚠️ WARNING: Model returned an empty or very short response.")
 
     except Exception as e:
-        print(f"\n❌ FAILED: Could not connect to Ollama or model not found.")
+        print("\n❌ FAILED: Could not connect to Ollama or model not found.")
         print(f"Error: {e}")
         print("\nDEBUG TIPS:")
-        print(f"1. Run 'ollama list' in terminal to see if '' exists.")
+        print("1. Run 'ollama list' in terminal to see if '' exists.")
         print("2. Ensure Ollama is running in the background.")
 
 
