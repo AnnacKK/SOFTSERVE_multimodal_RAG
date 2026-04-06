@@ -76,19 +76,9 @@ jobs:
             ollama pull qwen2.5:1.5b
             
             cd "${{ github.workspace }}/src/optimization/LoRa/lora_weights"
-            
-            # Debug: List files here so we can see if Git actually downloaded them
             echo "--- Current Directory Content ---"
             ls -al
-          
-          
-          
-          
-            
-            # Fix Windows line endings
             sed -i 's/\r$//' Modelfile
-            
-            # Create the model
             ollama create qwen-tun -f Modelfile
             
             ollama list
