@@ -15,5 +15,6 @@ qdrant_storage/
 **/fine_tunning_model/
 *.bin
 *.safetensors
-*.gguf
+!src/optimization/LoRa/qwen-tun-adapter.gguf
+
 
