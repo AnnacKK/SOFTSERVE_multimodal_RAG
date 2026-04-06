@@ -73,17 +73,12 @@ jobs:
             # Wait for the server to respond
             until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done
             ollama pull qwen2.5:1.5b
-            # Wait for the model to be actually pulled and loaded
-            sleep 30
-            # 2. Create  fine-tuned model for the RAG engine
-            # NOTE: This assumes your Modelfile and merged weights are in the repo.
-            # If weights are too big for Git, see 'Artifacts' note below.
-            if [ -d "src/optimization/LoRa/fine_tunning_model" ]; then
-              ollama create qwen-tun -f src/optimization/LoRa/Modelfile
-            else
-              echo "⚠️ Custom weights not found! Aliasing standard qwen for safety."
-              ollama cp qwen2.5:1s.5b qwen-tun
-            fi
+            # Create a Modelfile that points to the BASE and adds ADAPTERS
+            echo "FROM qwen2.5:1.5b" > Modelfile.ci
+            echo "ADAPTER ./src/optimization/LoRa/lora_weights" >> Modelfile.ci
+            
+            # Build the model
+            ollama create qwen-tun -f Modelfile.ci
             
             sleep 15
 

@@ -13,7 +13,7 @@ qdrant_storage/
 *.pyc
 **/checkpoint-*/
 **/lora_weights/
-**/fine_tunning_model/
+**/fine_tunning_model/z
 *.bin
 *.safetensors
 *.gguf
