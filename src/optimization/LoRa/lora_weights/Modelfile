@@ -1,6 +1,6 @@
 FROM qwen2.5:1.5b
 # use a relative path because run 'ollama create' from inside this folder
-ADAPTER ./adapter_model.safetensors
+ADAPTER .
 
 # Optional: Add your specific RAG parameters here so they are baked into the model
 PARAMETER temperature 0.7
