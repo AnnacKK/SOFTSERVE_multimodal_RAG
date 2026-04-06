@@ -94,7 +94,7 @@ jobs:
             
             # 5. Test it
             ollama list
-            ollama run qwen-tun --num_ctx 256 "hi"
+            ollama run qwen-tun "hi"
 
       - name: Inspect Ollama Health
         if: always()
