@@ -12,10 +12,8 @@ qdrant_storage/
 **/__pycache__/
 *.pyc
 **/checkpoint-*/
-**/lora_weights/
 **/fine_tunning_model/
 *.bin
 *.safetensors
 *.gguf
-!**/lora_weights/adapter_model.safetensors
-!**/lora_weights/adapter_config.json
+
