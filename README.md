@@ -77,8 +77,19 @@ with this every time you run ``docker compose up`` data ingestion will running a
 ``` bash
     docker compose --profile ingest up data_processing
 ```
-
-
+### Fine - tunning local OLLAMA model with QLoRa
+create train and test data split:
+python -m data_processing.lora_dataset
+fine tunning process:
+python -m src.optimization.qlora_tunning
+quantize OLLAMA model (ollama can do it by itself):
+ollama rm qwen-tun
+#as base model
+ollama create qwen-tun-qnt -f src/optimization/LoRa/Modelfile.quant --quantize q4_K_M
+#as quant model:
+ollama create qwen-tun -f src/optimization/LoRa/Modelfile
+check if model works:
+python -m src.test.test_ollama_LoRa_model
 ### Evaluation Dashboard: how to run and model accuracy
 Evaluation dashboard runs alltogether with api, so to acess go to ``http://localhost:8501``
 - View Scores: Track metrics and tradeoffs over time.

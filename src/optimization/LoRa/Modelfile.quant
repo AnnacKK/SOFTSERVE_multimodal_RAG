@@ -1,0 +1,3 @@
+# src/optimization/LoRa/Modelfile.quant
+FROM ./fine_tunning_model
+#points to the unquantize model

@@ -23,7 +23,7 @@ class RAGConfig(BaseSettings):
     RERANKER_NAME: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     TEXT_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
     IMAGE_MODEL_NAME: str = "sentence-transformers/clip-ViT-B-32"
-    VARIATIONS_LLAMA_MODEL_NAME: str = "qwen2.5:1.5b"
+    VARIATIONS_LLAMA_MODEL_NAME: str = "qwen-tun:latest"
 
     SPARSE_MODEL_NAME: str = "Qdrant/bm25"
 

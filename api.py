@@ -72,7 +72,7 @@ def clean_ragas_scores(raw_scores: dict) -> dict:
 
 rllm = ChatOllama(
     base_url=config.OLLAMA_BASE_URL,
-    model="qwen2.5:1.5b",
+    model=config.VARIATIONS_LLAMA_MODEL_NAME,
     #headers={"ngrok-skip-browser-warning": "true"},
     temperature=0,
     format="json",

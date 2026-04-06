@@ -11,3 +11,9 @@ Thumbs.db
 qdrant_storage/
 **/__pycache__/
 *.pyc
+**/checkpoint-*/
+**/lora_weights/
+**/fine_tunning_model/
+*.bin
+*.safetensors
+*.gguf

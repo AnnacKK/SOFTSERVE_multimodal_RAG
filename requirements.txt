@@ -56,3 +56,10 @@ eval_type_backport
 rouge-score
 nltk
 
+#LoRa
+transformers==4.45.2
+peft==0.12.0
+bitsandbytes==0.43.3
+accelerate==0.34.2
+trl==0.10.1
+

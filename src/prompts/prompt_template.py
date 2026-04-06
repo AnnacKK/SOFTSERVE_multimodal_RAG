@@ -27,6 +27,7 @@ class Prompt:
         ---
 
         [USER REQUEST]: {question}
+        [USER REQUEST]: {question}
 
         Provide the report in bullet points below:""",
             ),
@@ -48,6 +49,7 @@ class Prompt:
 
 
             Context: {context}
+            Original Question: {question}
             Original Question: {question}
             Proposed Summary: {answer}
 
