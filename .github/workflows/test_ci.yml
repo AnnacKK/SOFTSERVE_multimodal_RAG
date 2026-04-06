@@ -75,6 +75,7 @@ jobs:
             ollama pull qwen2.5:1.5b
             # Create a Modelfile that points to the BASE and adds ADAPTERS
             echo "FROM qwen2.5:1.5b" > Modelfile.ci
+          
             echo "ADAPTER ${{ github.workspace }}/src/optimization/LoRa/lora_weights" >> Modelfile.ci
             
             # Build the model
