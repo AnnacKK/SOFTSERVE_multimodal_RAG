@@ -1,28 +1,56 @@
 import os
-from llama_cpp.llama_cpp import convert_model_to_gguf
+import json
+import torch
+from safetensors.torch import load_file
+from gguf import GGUFWriter
 
 
-def convert_folder_to_gguf(model_dir, output_filename, quant_type="q4_k_m"):
-    """
-    Standalone script to convert a folder of HF weights into a single GGUF file.
-    """
-    if not os.path.exists(model_dir):
-        print(f"Error: Directory {model_dir} not found.")
+def create_lora_gguf(model_dir, output_path):
+
+    config_path = os.path.join(model_dir, "adapter_config.json")
+    if not os.path.exists(config_path):
+        print(f"❌ Error: {config_path} not found!")
         return
 
-    print(f"🚀 Starting conversion for: {model_dir}")
+    with open(config_path, "r") as f:
+        config = json.load(f)
 
-    convert_model_to_gguf(
-        model_path=model_dir,
-        out_path=output_filename,
-        quantization=quant_type
-    )
+    weights_path = os.path.join(model_dir, "adapter_model.safetensors")
+    if not os.path.exists(weights_path):
+        print(f"❌ Error: {weights_path} not found!")
+        return
 
-    print(f"✅ Success! GGUF saved to: {output_filename}")
+    print(f"📂 Loading weights from {weights_path}...")
+    tensors = load_file(weights_path)
+
+    writer = GGUFWriter(output_path, "qwen2")
+
+
+    writer.add_string("general.architecture", "qwen2")
+    writer.add_string("general.type", "adapter")
+    writer.add_uint32("adapter.type", 1)  # LoRA type
+    writer.add_float32("adapter.lora.alpha", config.get("lora_alpha", 16.0))
+
+
+    print(f"⚙️  Converting {len(tensors)} tensors...")
+    for name, data in tensors.items():
+        # GGUF expects Float32 or Float16 for adapters.
+        data_np = data.to(torch.float32).numpy()
+        writer.add_tensor(name, data_np)
+
+
+    writer.write_header_to_file()
+    writer.write_kv_data_to_file()
+    writer.write_tensors_to_file()
+    writer.close()
+
+    print(f"✅ SUCCESS! GGUF created at: {output_path}")
 
 
 if __name__ == "__main__":
-    INPUT_DIR = "src/optimization/LoRa/fine_tunning_model"
-    OUTPUT_FILE = "src/optimization/LoRa/qwen-tun.gguf"
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    convert_folder_to_gguf(INPUT_DIR, OUTPUT_FILE)
+    INPUT_FOLDER = os.path.join(BASE_DIR, "LoRa", "lora_weights")
+    OUTPUT_FILE = os.path.join(BASE_DIR, "LoRa", "qwen-tun-adapter.gguf")
+
+    create_lora_gguf(INPUT_FOLDER, OUTPUT_FILE)

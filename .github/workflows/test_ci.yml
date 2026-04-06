@@ -74,25 +74,21 @@ jobs:
             nohup ollama serve > ollama.log 2>&1 &
             until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done
             ollama pull qwen2.5:1.5b
+            GGUF_PATH="${{ github.workspace }}/src/optimization/LoRa/qwen-tun-adapter.gguf"
             
-            TARGET_DIR="${{ github.workspace }}/src/optimization/LoRa/lora_weights"
-            
-            # 2. Move INTO the directory
-            cd "$TARGET_DIR"
-            
-            # 3. Create a fresh Modelfile RIGHT HERE so there is zero path confusion
-            # We use ADAPTER . to tell Ollama "everything is in this current folder"
+            # 3. Create the Modelfile dynamically
+            # We use FROM to get the base and ADAPTER to point to your new GGUF
             cat <<EOF > Modelfile.ci
             FROM qwen2.5:1.5b
-            ADAPTER .
-            PARAMETER temperature 0.7
+            ADAPTER $GGUF_PATH
             EOF
 
-            # 4. Build the model using the local file
-            # We stay in this directory so Ollama 'sees' the safetensors and config
+            # 4. Build it
             ollama create qwen-tun -f Modelfile.ci
             
+            # 5. Test it
             ollama list
+            ollama run qwen-tun "Hello, who are you?"
 
       - name: Sanitize Test Files
         run: |
