@@ -87,8 +87,6 @@ jobs:
             FROM qwen2.5:1.5b
             ADAPTER $GGUF_PATH
             EOF
-
-            # 4. Build it
             sleep 10
             ollama create qwen-tun -f Modelfile.ci
             
