@@ -79,7 +79,7 @@ jobs:
             echo "--- Current Directory Content ---"
             ls -al
             sed -i 's/\r$//' Modelfile
-            ollama create qwen-tun -f Modelfile
+            ollama create qwen-tun -f ${{ github.workspace }}/Modelfile
             
             ollama list
 
