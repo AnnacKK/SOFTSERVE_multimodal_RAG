@@ -70,18 +70,28 @@ jobs:
         run: |
             curl -fsSL https://ollama.com/install.sh | sh
             nohup ollama serve > ollama.log 2>&1 &
-            # Wait for the server to respond
             until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done
+            
+            # Pull base model
             ollama pull qwen2.5:1.5b
-            # Create a Modelfile that points to the BASE and adds ADAPTERS
-            echo "FROM qwen2.5:1.5b" > Modelfile.ci
-          
-            echo "ADAPTER ${{ github.workspace }}/src/optimization/LoRa/lora_weights" >> Modelfile.ci
+            
+            # THE FIX: Create Modelfile.ci using absolute paths to avoid 'file not found'
+            # We use double quotes inside the Modelfile so Ollama handles the Linux path correctly
+            cat <<EOF > Modelfile.ci
+            FROM qwen2.5:1.5b
+            ADAPTER "${{ github.workspace }}/src/optimization/LoRa/lora_weights"
+            EOF
+            
+            # DEBUG: Prove the files exist in the runner before building
+            echo "--- Verifying Adapter Files ---"
+            ls -al ${{ github.workspace }}/src/optimization/LoRa/lora_weights
             
             # Build the model
             ollama create qwen-tun -f Modelfile.ci
             
-            sleep 15
+            # Verify the model is registered
+            ollama list
+            sleep 10
 
       - name: Sanitize Test Files
         run: |
