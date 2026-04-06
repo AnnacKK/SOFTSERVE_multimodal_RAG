@@ -69,10 +69,15 @@ jobs:
             
 
       - name: Install & Background Ollama
+        env:
+          OLLAMA_HOST: 0.0.0.0
+          # Force CPU execution to prevent the runner from crashing on GPU init
+          CUDA_VISIBLE_DEVICES: ""
         run: |
             curl -fsSL https://ollama.com/install.sh | sh
             nohup ollama serve > ollama.log 2>&1 &
             until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done
+            sleep 10
             ollama pull qwen2.5:1.5b
             GGUF_PATH="${{ github.workspace }}/src/optimization/LoRa/qwen-tun-adapter.gguf"
             
@@ -84,11 +89,20 @@ jobs:
             EOF
 
             # 4. Build it
+            sleep 10
             ollama create qwen-tun -f Modelfile.ci
             
             # 5. Test it
             ollama list
-            ollama run qwen-tun "Hello, who are you?"
+            ollama run qwen-tun --num_ctx 256 "hi"
+
+      - name: Inspect Ollama Health
+        if: always()
+        run: |
+          echo "--- OLLAMA LOGS ---"
+          cat ollama.log
+          echo "--- RAM USAGE ---"
+          free -h
 
       - name: Sanitize Test Files
         run: |
