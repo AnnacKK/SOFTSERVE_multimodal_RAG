@@ -75,11 +75,22 @@ jobs:
             until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done
             ollama pull qwen2.5:1.5b
             
-            cd "${{ github.workspace }}/src/optimization/LoRa/lora_weights"
-            echo "--- Current Directory Content ---"
-            ls -al
-            sed -i 's/\r$//' Modelfile
-            ollama create qwen-tun -f ${{ github.workspace }}/Modelfile
+            TARGET_DIR="${{ github.workspace }}/src/optimization/LoRa/lora_weights"
+            
+            # 2. Move INTO the directory
+            cd "$TARGET_DIR"
+            
+            # 3. Create a fresh Modelfile RIGHT HERE so there is zero path confusion
+            # We use ADAPTER . to tell Ollama "everything is in this current folder"
+            cat <<EOF > Modelfile.ci
+            FROM qwen2.5:1.5b
+            ADAPTER .
+            PARAMETER temperature 0.7
+            EOF
+
+            # 4. Build the model using the local file
+            # We stay in this directory so Ollama 'sees' the safetensors and config
+            ollama create qwen-tun -f Modelfile.ci
             
             ollama list
 
