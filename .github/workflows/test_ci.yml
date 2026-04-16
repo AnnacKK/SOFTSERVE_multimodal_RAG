@@ -156,7 +156,7 @@ jobs:
 
       - name: Lowercase Repo Name
         run: |
-          echo "IMAGE_NAME=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "OWNER_LC=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -182,8 +182,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:latest
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LC }}/${{ matrix.service }}:latest
+            ghcr.io/${{ env.OWNER_LC }}/${{ matrix.service }}:${{ github.sha }}
             ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com/${{ matrix.service }}:latest
             ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com/${{ matrix.service }}:${{ github.sha }}
   deploy-gitops:
@@ -202,9 +202,9 @@ jobs:
           run: |
             #
             cd infra/base 
-            kustomize edit set image ghcr.io/annackk/rag-api=ghcr.io/${{ github.repository_owner }}/rag-api:${{ github.sha }}
-            kustomize edit set image ghcr.io/annackk/rag-dashboard=ghcr.io/${{ github.repository_owner }}/rag-dashboard:${{ github.sha }}
-            kustomize edit set image ghcr.io/annackk/data_processing=ghcr.io/${{ github.repository_owner }}/data_processing:${{ github.sha }}
+            kustomize edit set image ghcr.io/annackk/rag-api=ghcr.io/${{ env.OWNER_LC }}/rag-api:${{ github.sha }}
+            kustomize edit set image ghcr.io/annackk/rag-dashboard=ghcr.io/${{ env.OWNER_LC }}/rag-dashboard:${{ github.sha }}
+            kustomize edit set image ghcr.io/annackk/data_processing=ghcr.io/${{ env.OWNER_LC }}/data_processing:${{ github.sha }}
         - name: Commit and Push
           run: |
             cd infra
