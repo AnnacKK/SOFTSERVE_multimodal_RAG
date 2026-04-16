@@ -1,5 +1,6 @@
 # src/config.py
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 
 
 class RAGConfig(BaseSettings):
@@ -13,7 +14,7 @@ class RAGConfig(BaseSettings):
     COLLECTION_NAME: str = "the_batch_production"
 
     LLM_MODEL_NAME: str = "qwen2.5:1.5b"  # qwen2.5:3b can be struggled
-    OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
+    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
     OlLAMA_URL_COLLAB: str = "http://host.docker.internal:11434"
 
@@ -23,7 +24,7 @@ class RAGConfig(BaseSettings):
     RERANKER_NAME: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     TEXT_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
     IMAGE_MODEL_NAME: str = "sentence-transformers/clip-ViT-B-32"
-    VARIATIONS_LLAMA_MODEL_NAME: str = "qwen-tun"
+    VARIATIONS_LLAMA_MODEL_NAME = os.getenv("MODEL_NAME", "qwen-tun")
 
     SPARSE_MODEL_NAME: str = "Qdrant/bm25"
 
