@@ -14,7 +14,7 @@ class RAGConfig(BaseSettings):
     COLLECTION_NAME: str = "the_batch_production"
 
     LLM_MODEL_NAME: str = "qwen2.5:1.5b"  # qwen2.5:3b can be struggled
-    OLLAMA_BASE_URL : str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
     OlLAMA_URL_COLLAB: str = "http://host.docker.internal:11434"
 

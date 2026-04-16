@@ -23,7 +23,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
       - name: Run Ruff Auto-Fix
         continue-on-error: true
@@ -53,11 +53,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+      - name: Maximize Build Space
+        run: |
+            sudo rm -rf /usr/share/dotnet
+            sudo rm -rf /usr/local/lib/android
+            sudo rm -rf /opt/ghc
+            sudo rm -rf "/usr/local/share/boost"
+            sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+            df -h # This will show you exactly how much you freed up in the logs
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
           cache: 'pip'
 
       - name: Install Dependencies
@@ -66,6 +74,7 @@ jobs:
             pip install --upgrade "giskard[llm]" litellm evaluate google-generativeai
             pip install -r requirements.txt pytest pytest-asyncio
             pip install flashrank
+      
             
 
       - name: Install & Background Ollama
