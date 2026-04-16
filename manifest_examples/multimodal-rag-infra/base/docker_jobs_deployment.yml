@@ -11,7 +11,7 @@ spec:
     spec:
       containers:
       - name: processor
-        image: ghcr.io/annackk/multimodalrag:latest
+        image: ghcr.io/annackk/data_processing:latest
         command: ["python", "data_processing/mapping.py"]
         envFrom:
         - configMapRef:
@@ -32,7 +32,7 @@ spec:
         spec:
           containers:
           - name: processor
-            image: ghcr.io/annackk/multimodalrag:latest
+            image: ghcr.io/annackk/data_processing:latest
             command: ["python", "data_processing/mapping.py"]
             envFrom:
             - configMapRef:
@@ -54,7 +54,7 @@ spec:
           serviceAccountName: rag-api-sa
           containers:
           - name: detector
-            image: ghcr.io/annackk/multimodalrag:latest
+            image: ghcr.io/annackk/data_processing:latest
             command: ["python", "src/detectors/drift_check.py"]
             env:
             - name: TRIGGER_INGESTION

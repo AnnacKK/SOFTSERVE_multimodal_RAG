@@ -76,11 +76,12 @@ spec:
       labels:
         app: rag-api
     spec:
+      serviceAccountName: rag-api-sa
 #      nodeSelector:
 #        kubernetes.io/hostname: kind-worker
       containers:
       - name: rag-api
-        image: ghcr.io/annackk/multimodalrag:latest
+        image: ghcr.io/annackk/rag-api:latest
 #        command: [ "uvicorn" ]
 #        args: [ "api:app", "--host", "0.0.0.0", "--port", "8000", "--loop", "asyncio" ]
         imagePullPolicy: IfNotPresent
@@ -148,11 +149,11 @@ spec:
       labels:
         app: rag-dashboard
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: kind-worker
+#      nodeSelector:
+#        kubernetes.io/hostname: kind-worker
       containers:
       - name: dashboard
-        image: ghcr.io/annackk/multimodalrag:latest
+        image: ghcr.io/annackk/rag-dashboard:latest
         imagePullPolicy: IfNotPresent
 #        command: [ "streamlit", "run" ]
 #        args: [ "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0" ]

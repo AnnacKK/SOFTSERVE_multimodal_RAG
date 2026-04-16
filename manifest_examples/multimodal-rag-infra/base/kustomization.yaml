@@ -5,9 +5,13 @@ kind: Kustomization
 resources:
 - docker-deployment.yml
 - docker_jobs_deployment.yml
+- configmap.yaml
 
 # allows GitHub Action to update the image tags
 images:
-- name: ghcr.io/annackk/multimodalrag
-  newName: ghcr.io/annackk/softserve_multimodal_rag
-  newTag: 468bacd664fc11a86234ccf7493e1235b8a25447
+- name: ghcr.io/annackk/rag-api
+  newName: <YOUR_AWS_ID>.dkr.ecr.eu-west-1.amazonaws.com/rag-api
+- name: ghcr.io/annackk/rag-dashboard
+  newName: <YOUR_AWS_ID>.dkr.ecr.eu-west-1.amazonaws.com/rag-dashboard
+- name: ghcr.io/annackk/data_processing
+  newName: <YOUR_AWS_ID>.dkr.ecr.eu-west-1.amazonaws.com/data_processing
