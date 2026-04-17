@@ -203,7 +203,7 @@ async def test_batch_rag_evaluation():
 
 
                     if not answer.strip() or "I couldn't find any relevant snippets" in answer:
-                        return "I am sorry, plese refrase so i can search again later."
+                        return "I am sorry, please refrase so i can search again later."
 
                     return answer
 
@@ -311,8 +311,8 @@ async def test_batch_rag_evaluation():
 
     judge_fails = [r for r in judge_results if r["judge_decision"] == "FAIL"]
     assert not judge_fails, f"❌ Judge failed {len(judge_fails)} cases. Check {judge_report_name}"
-    #major_issues = [issue for issue in scan_results.issues if issue.level == "major"]
-    #assert not major_issues, f"❌ Giskard found {len(major_issues)} MAJOR issues. Check report."
+    major_issues = [issue for issue in scan_results.issues if issue.level == "major"]
+    assert not major_issues, f"❌ Giskard found {len(major_issues)} MAJOR issues. Check report."
     await qdrant_client.close()
 
 
