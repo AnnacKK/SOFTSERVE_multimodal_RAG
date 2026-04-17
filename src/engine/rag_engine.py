@@ -50,7 +50,7 @@ class MultimodalRAG:
         self.vision_model = SentenceTransformer(
             config.IMAGE_MODEL_NAME,
             device=self.device,
-            model_kwargs={"use_fast": True}
+            model_kwargs={}
         )
         self.reranker = CrossEncoder(
             config.RERANKER_NAME,
