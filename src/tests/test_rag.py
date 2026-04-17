@@ -182,22 +182,30 @@ async def test_batch_rag_evaluation():
     test_df["ground_truth"] = "N/A"
 
     def model_predict(df: pd.DataFrame):
-        async def wrapped_predict(q_str):
+        async def wrapped_predict(row_dict):
             async with test_sem:
                 try:
 
-                    q = str(q_str).strip() if pd.notna(q_str) else ""
+                    q_base = row_dict.get('question')
 
+                    # Check if the primary question column is empty
+                    if pd.isna(q_base) or str(q_base).strip().lower() in ['nan', 'none', '']:
+                        # Join other available columns (like 'category' or 'query')
+                        q_final = " ".join([str(v) for k, v in row_dict.items()
+                                            if pd.notna(v) and k not in ['ground_truth', 'question']])
+                    else:
+                        q_final = str(q_base)
 
-                    if not q or q.lower() in ['nan', 'none', 'null', 'undefined'] or len(q) < 2:
-                        return "I am sorry, but I do not have enough information to answer that question."
+                    q_final = q_final.strip()
+
+                    if not q_final or q_final.lower() in ['nan', 'none']:
+                        return "Please provide a specific question about AI or Business."
 
                     rag_engine.chat_history.clear()
-
-                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q), timeout=500.0)
+                    res = await asyncio.wait_for(rag_engine.run_hybrid_rag(q_final), timeout=500.0)
 
                     if res is None:
-                        return "I am sorry, but I do not have enough information to answer that question."
+                        return "I am sorry, but I do not have enough information in my database to answer that."
 
                     answer = res.get("answer", "")
 
@@ -217,8 +225,9 @@ async def test_batch_rag_evaluation():
             for _, row in df.iterrows():
                 # Get whatever column Giskard is currently testing
                 # Giskard maps its inputs to feature_names=["question", "category"]
-                q = row.get('question', "")
-                results.append(await wrapped_predict(q))
+                #q = row.get('question', "")
+                print(f"DEBUG: Giskard sent row: {row.to_dict()}")
+                results.append(await wrapped_predict(row.to_dict()))
                 await asyncio.sleep(0.1)
             return results
 
