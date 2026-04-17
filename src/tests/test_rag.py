@@ -311,7 +311,7 @@ async def test_batch_rag_evaluation():
 
     judge_fails = [r for r in judge_results if r["judge_decision"] == "FAIL"]
     assert not judge_fails, f"❌ Judge failed {len(judge_fails)} cases. Check {judge_report_name}"
-    [issue for issue in scan_results.issues if issue.level == "major"]
+    #major_issues = [issue for issue in scan_results.issues if issue.level == "major"]
     #assert not major_issues, f"❌ Giskard found {len(major_issues)} MAJOR issues. Check report."
     await qdrant_client.close()
 
