@@ -1,20 +1,36 @@
 import math
 import os
 import sqlite3
+import psycopg2
 from datetime import datetime
 
-# This finds the directory this script is in (src/monitoring_db/)
+# Connection config
+DATABASE_URL = os.getenv("DATABASE_URL")  # Provided by K8s YAML
 current_dir = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(current_dir, "rag_metrics.db")
+SQLITE_DB_PATH = os.path.join(current_dir, "rag_metrics.db")
+
+
+def get_connection():
+    """Returns a connection and the correct placeholder character."""
+    if DATABASE_URL:
+        # Postgres mode (Kubernetes)
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn, "%s"
+    else:
+        # SQLite mode (Local)
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        return conn, "?"
 
 
 def init_db() -> None:
-    conn = sqlite3.connect(DB_PATH)
+    conn, q = get_connection()
     cursor = conn.cursor()
-    # Create a table to store production logs and Ragas scores
-    cursor.execute("""
+
+    id_type = "SERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
+
+    cursor.execute(f"""
         CREATE TABLE IF NOT EXISTS evaluation_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {id_type},
             timestamp TEXT,
             question TEXT,
             answer TEXT,
@@ -22,16 +38,12 @@ def init_db() -> None:
             answer_relevancy REAL,
             context_utilization REAL,
             is_corrected INTEGER DEFAULT 0,
-
             bleu REAL,
             rouge_l REAL,
-
             factcc_consistency REAL,
-
             ner_coverage REAL,
             ner_hallucination REAL,
             ner_density REAL,
-
             harm_score REAL,
             harm_category TEXT
         )
@@ -50,47 +62,37 @@ def log_to_db(question, answer, scores) -> None:
         except:
             return 0.0
 
-    faithfulness_score = clean_score(scores.get("faithfulness"))
-    answer_relevancy_score = clean_score(scores.get("answer_relevancy"))
-    context_utilization_score = clean_score(scores.get("context_utilization"))
-    is_corrected = int(scores.get("is_corrected", 0))
-    bleu = clean_score(scores.get("bleu"))
-    rouge_l = clean_score(scores.get("rouge_l"))
-    factcc_consistency = clean_score(scores.get("factcc_consistency"))
-    ner_coverage = clean_score(scores.get("ner_coverage"))
-    ner_hallucination = clean_score(scores.get("ner_hallucination"))
-    ner_density = clean_score(scores.get("ner_density"))
-    harm_score = clean_score(scores.get("harm_score"))
-    harm_category = scores.get("harm_category", "none")
-
-    conn = sqlite3.connect(DB_PATH)
+    conn, q = get_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO evaluation_logs (timestamp, question, answer, faithfulness, answer_relevancy,context_utilization,
-        is_corrected, bleu, rouge_l,
-            factcc_consistency,
-            ner_coverage, ner_hallucination, ner_density,
-            harm_score, harm_category)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """,
-        (
-            datetime.now().isoformat(),
-            question,
-            answer,
-            faithfulness_score,
-            answer_relevancy_score,
-            context_utilization_score,
-            is_corrected,
-            bleu,
-            rouge_l,
-            factcc_consistency,
-            ner_coverage,
-            ner_hallucination,
-            ner_density,
-            harm_score,
-            harm_category,
-        ),
+
+    query = f"""
+        INSERT INTO evaluation_logs (
+            timestamp, question, answer, faithfulness, answer_relevancy, 
+            context_utilization, is_corrected, bleu, rouge_l,
+            factcc_consistency, ner_coverage, ner_hallucination, 
+            ner_density, harm_score, harm_category
+        )
+        VALUES ({q}, {q}, {q}, {q}, {q}, {q}, {q}, {q}, {q}, {q}, {q}, {q}, {q}, {q}, {q})
+    """
+
+    values = (
+        datetime.now().isoformat(),
+        question,
+        answer,
+        clean_score(scores.get("faithfulness")),
+        clean_score(scores.get("answer_relevancy")),
+        clean_score(scores.get("context_utilization")),
+        int(scores.get("is_corrected", 0)),
+        clean_score(scores.get("bleu")),
+        clean_score(scores.get("rouge_l")),
+        clean_score(scores.get("factcc_consistency")),
+        clean_score(scores.get("ner_coverage")),
+        clean_score(scores.get("ner_hallucination")),
+        clean_score(scores.get("ner_density")),
+        clean_score(scores.get("harm_score")),
+        scores.get("harm_category", "none"),
     )
+
+    cursor.execute(query, values)
     conn.commit()
     conn.close()
